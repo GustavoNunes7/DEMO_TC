@@ -58,6 +58,7 @@ db.exec(`
     lida INTEGER NOT NULL DEFAULT 0 CHECK(lida IN (0,1)),
     criada_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
+`);
 db.exec(`
   CREATE TABLE IF NOT EXISTS preferencias_privacidade (
     usuario_id INTEGER PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
@@ -66,7 +67,6 @@ db.exec(`
     exibir_email INTEGER NOT NULL DEFAULT 0 CHECK(exibir_email IN (0,1)),
     atualizado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
-`);
 `);
 const colunasUsuario = db.prepare("PRAGMA table_info(usuarios)").all().map((c) => c.name);
 if (!colunasUsuario.includes("ativo")) db.exec("ALTER TABLE usuarios ADD COLUMN ativo INTEGER NOT NULL DEFAULT 1");
