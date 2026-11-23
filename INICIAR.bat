@@ -52,7 +52,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-for /f "delims=" %%P in ('node -e "require(''dotenv'').config();process.stdout.write(process.env.PORT||''3022'')" 2^>nul') do set "PORT=%%P"
+for /f "tokens=2 delims==" %%P in ('findstr /B "PORT=" .env') do set "PORT=%%P"
 if not defined PORT set "PORT=3022"
 set "URL=http://localhost:%PORT%/"
 
