@@ -667,6 +667,10 @@ r.post("/pedidos", autenticar, (req, res) => {
       }
       return { id: info.lastInsertRowid, repetido: false };
     })();
+    if (!resultado.repetido) {
+      const pedido = get("pedidos", resultado.id);
+      notificarAdmins("Novo pedido recebido", `O aluno #${pedido.usuario_id} realizou o pedido #${resultado.id}. Acesse o painel para conferir os itens e o pagamento.`);
+    }
     res.status(resultado.repetido ? 200 : 201).json(detalharPedido(resultado.id));
   } catch (e) {
     return bad(res, e.message);
