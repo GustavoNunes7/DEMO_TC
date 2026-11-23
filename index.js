@@ -3,7 +3,7 @@ const express = require("express"),
   path = require("path");
 const { ready } = require("./src/database/sqlite");
 const app = express(),
-  PORT = Number(process.env.PORT) || 3001;
+  PORT = Number(process.env.PORT) || 3022;
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   console.error("Configure JWT_SECRET (mínimo 32 caracteres) no .env");
   process.exit(1);
