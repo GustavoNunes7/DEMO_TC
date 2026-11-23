@@ -1,11 +1,11 @@
-
 {
-  "name": "techcampus",
+  "name": "demo-tc",
   "version": "1.0.0",
-  "description": "Backend do TechCampus - AAPM",
+  "description": "Versão demonstrativa do sistema TechCampus",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "setup": "node setup-demo.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
