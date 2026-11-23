@@ -1,33 +1,60 @@
-# TechCampus — AAPM
+# DEMO_TC — TechCampus
 
-Sistema web da Associação de Alunos, Ex-alunos, Pais e Mestres (AAPM).
+Versão demonstrativa do sistema de gestão de associações educacionais.
 
-## Como executar
+## Requisitos
 
-No Windows, a inicialização do TechCampus deve ser feita pelo arquivo **`INICIAR.bat`**.
+- Node.js LTS
+- npm
+- Windows: execute `INICIAR.bat`
+- Linux/macOS: utilize os comandos abaixo.
 
-1. Verifique se o **Node.js** está instalado no computador.
-2. Certifique-se de que o arquivo **`.env`** esteja configurado na pasta principal do projeto.
-3. Abra a pasta do TechCampus.
-4. Dê dois cliques em **`INICIAR.bat`**.
-5. Aguarde a verificação do ambiente e a inicialização do servidor. Quando estiver pronto, a Landing Page será aberta no navegador.
+## Primeira execução no Windows
 
-O arquivo `INICIAR.bat` é o inicializador oficial do projeto no Windows. **Não é necessário iniciar o projeto manualmente pelos comandos `npm install` e `npm start` quando estiver utilizando esse arquivo.**
+1. Baixe ou atualize a pasta da DEMO_TC.
+2. Execute `INICIAR.bat`.
+3. O inicializador cria o arquivo local `.env` a partir de `.env.example`, instala as dependências e prepara o banco.
+4. Na primeira execução, uma senha aleatória para `admin@techcampus.com` é gerada, salva no `.env` e exibida uma única vez no terminal. Guarde-a.
+5. Acesse **http://localhost:3022/**.
 
-> **Importante:** mantenha a janela do servidor aberta enquanto estiver utilizando o TechCampus. Se ocorrer algum erro na inicialização, consulte a mensagem exibida no terminal. O arquivo `.env` contém configurações locais e não deve ser publicado com chaves ou senhas reais.
+## Primeira execução no Linux/macOS
 
-## Recuperação de senha por e-mail
-
-A recuperação utiliza a API de envio da Resend. Configure estas variáveis no arquivo `.env` (nunca publique suas chaves):
-
-```env
-RESEND_API_KEY=re_sua_chave
-EMAIL_FROM=TechCampus <contato@seudominio.com>
-APP_URL=http://localhost:3022
+```bash
+cp .env.example .env
+npm install
+npm run setup
+npm start
 ```
 
-O remetente precisa estar autorizado/verificado na Resend. Em ambiente local, mantenha `APP_URL` apontando para o endereço e a porta do TechCampus. O link expira em 15 minutos e só pode ser usado uma vez. Sem essas variáveis, a interface informa que a recuperação por e-mail ainda não está configurada; nenhum token é exibido no navegador.
+Na primeira preparação, o terminal exibe a senha administrativa gerada uma única vez. Guarde-a. O endereço padrão é **http://localhost:3022/**.
 
-## Encerramento da conta do aluno
+## Conta administrativa
 
-O aluno pode encerrar a própria conta em **Configurações → Segurança → Encerrar minha conta**, confirmando sua senha. O acesso é desativado, sessões emitidas pelo sistema são invalidadas e dados pessoais do perfil são removidos. Pedidos e pagamentos permanecem vinculados ao registro anonimizado para preservar o histórico financeiro.
+- E-mail padrão: `admin@techcampus.com`
+- Senha: gerada automaticamente na primeira inicialização e exibida no terminal.
+
+Para definir uma nova senha, altere `ADMIN_PASSWORD` no arquivo local `.env` (mínimo de 12 caracteres) e execute:
+
+```bash
+node seed-admin.js
+```
+
+## Configuração local
+
+O arquivo `.env.example` contém as variáveis de referência. O arquivo `.env` contém segredos e senhas locais: não o publique nem o compartilhe.
+
+- `PORT`: porta HTTP (padrão 3022)
+- `DB_PATH`: caminho do banco SQLite
+- `JWT_SECRET`: segredo de sessão, gerado automaticamente pelo preparador
+- `PAGAMENTO_SIMULADO=true`: habilita simulação de pagamento PIX
+- `ADMIN_EMAIL` e `ADMIN_PASSWORD`: credenciais administrativas locais
+- `RESEND_API_KEY`, `EMAIL_FROM`, `APP_URL`: configuração opcional de recuperação de senha por e-mail
+
+## Pagamentos e IoT
+
+Esta é uma versão demonstrativa. Não utilize para processar pagamentos reais. A liberação do token de retirada depende da confirmação do pagamento registrada no sistema. A integração física com o dispositivo IoT deve ser validada no ambiente de apresentação.
+
+## Segurança
+
+- O Git ignora o arquivo `.env`, bancos SQLite, pastas de uploads e dependências instaladas.
+- Não adicione senhas, chaves de API ou dados pessoais reais ao repositório.
