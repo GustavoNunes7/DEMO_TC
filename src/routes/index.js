@@ -952,6 +952,8 @@ r.patch("/pedidos/:id/status", autenticar, admin, (req, res) => {
       db.prepare("UPDATE pagamentos SET status='cancelado' WHERE pedido_id=? AND status='pendente'").run(p.id);
     }
   })();
+  db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)")
+    .run(p.usuario_id, "Atualização do pedido", `Seu pedido #${p.id} foi atualizado para: ${status}.`);
   res.json(detalharPedido(p.id));
 });
 // Renovação manual de token expirado, mantendo a regra de um token ativo por pedido.
@@ -970,6 +972,8 @@ r.post("/pedidos/:id/token/renovar", autenticar, (req, res) => {
   while (db.prepare("SELECT id FROM tokens_retirada WHERE token=? AND id<>?").get(novoToken, registro.id));
   db.prepare("UPDATE tokens_retirada SET token=?, expira_em=?, criado_em=CURRENT_TIMESTAMP WHERE id=?")
     .run(novoToken, Date.now() + 15 * 60 * 1000, registro.id);
+  db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)")
+    .run(pedido.usuario_id, "Token IoT renovado", `Um novo token de retirada foi liberado para o pedido #${pedido.id}.`);
   res.json({ token: novoToken, expiraEm: Date.now() + 15 * 60 * 1000, status: "ativo" });
 });
 
@@ -1318,6 +1322,7 @@ r.post("/agendamentos", autenticar, (req, res) => {
       "INSERT INTO agendamentos(usuario_id,recurso,inicio,fim) VALUES(?,?,?,?)",
     )
     .run(req.usuario.id, recurso, inicio, fim);
+  notificarAdmins("Nova solicitação de agendamento", `Solicitação #${info.lastInsertRowid} para ${recurso} enviada pelo usuário #${req.usuario.id}.`);
   res.status(201).json(get("agendamentos", info.lastInsertRowid));
 });
 // Ajuda / chamados
