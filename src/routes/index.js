@@ -1019,6 +1019,8 @@ r.post(["/iot/confirmar", "/iot/confirm"], iotLimit, (req, res) => {
 
 // Notificações privadas do usuário autenticado.
 r.get("/notificacoes", autenticar, (req, res) => {
+  const pref = db.prepare("SELECT notificacoes_sistema FROM preferencias_privacidade WHERE usuario_id=?").get(req.usuario.id);
+  if (pref && Number(pref.notificacoes_sistema) === 0) return res.json([]);
   res.json(db.prepare("SELECT * FROM notificacoes WHERE usuario_id=? ORDER BY id DESC LIMIT 100").all(req.usuario.id));
 });
 r.patch("/notificacoes/:id/lida", autenticar, (req, res) => {
