@@ -58,6 +58,15 @@ db.exec(`
     lida INTEGER NOT NULL DEFAULT 0 CHECK(lida IN (0,1)),
     criada_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
+db.exec(`
+  CREATE TABLE IF NOT EXISTS preferencias_privacidade (
+    usuario_id INTEGER PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
+    notificacoes_sistema INTEGER NOT NULL DEFAULT 1 CHECK(notificacoes_sistema IN (0,1)),
+    exibir_telefone INTEGER NOT NULL DEFAULT 0 CHECK(exibir_telefone IN (0,1)),
+    exibir_email INTEGER NOT NULL DEFAULT 0 CHECK(exibir_email IN (0,1)),
+    atualizado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+`);
 `);
 const colunasUsuario = db.prepare("PRAGMA table_info(usuarios)").all().map((c) => c.name);
 if (!colunasUsuario.includes("ativo")) db.exec("ALTER TABLE usuarios ADD COLUMN ativo INTEGER NOT NULL DEFAULT 1");
@@ -205,6 +214,27 @@ r.get("/perfil", autenticar, (req, res) => {
   const u = get("usuarios", req.usuario.id);
   if (!u) return res.sendStatus(401);
   res.json(publicUser(u));
+});
+
+// Preferências privadas: cada aluno só consulta e altera as próprias opções.
+r.get("/preferencias", autenticar, (req, res) => {
+  db.prepare("INSERT OR IGNORE INTO preferencias_privacidade(usuario_id) VALUES(?)").run(req.usuario.id);
+  const p = db.prepare("SELECT notificacoes_sistema,exibir_telefone,exibir_email FROM preferencias_privacidade WHERE usuario_id=?").get(req.usuario.id);
+  res.json(p || { notificacoes_sistema: 1, exibir_telefone: 0, exibir_email: 0 });
+});
+r.patch("/preferencias", autenticar, (req, res) => {
+  const atual = db.prepare("SELECT * FROM preferencias_privacidade WHERE usuario_id=?").get(req.usuario.id) || {};
+  const valor = (chave, padrao) => req.body[chave] === undefined ? Number(atual[chave] ?? padrao) : (req.body[chave] === true || req.body[chave] === 1 ? 1 : req.body[chave] === false || req.body[chave] === 0 ? 0 : -1);
+  const notificacoes = valor("notificacoes_sistema", 1);
+  const telefone = valor("exibir_telefone", 0);
+  const email = valor("exibir_email", 0);
+  if ([notificacoes, telefone, email].some(v => v < 0)) return bad(res, "Preferências inválidas.");
+  db.prepare(`INSERT INTO preferencias_privacidade(usuario_id,notificacoes_sistema,exibir_telefone,exibir_email,atualizado_em)
+    VALUES(?,?,?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(usuario_id) DO UPDATE SET notificacoes_sistema=excluded.notificacoes_sistema,
+    exibir_telefone=excluded.exibir_telefone,exibir_email=excluded.exibir_email,atualizado_em=CURRENT_TIMESTAMP`)
+    .run(req.usuario.id, notificacoes, telefone, email);
+  res.json({ notificacoes_sistema: notificacoes, exibir_telefone: telefone, exibir_email: email });
 });
 r.patch("/perfil", autenticar, (req, res) => {
   const u = get("usuarios", req.usuario.id);
@@ -1119,7 +1149,7 @@ r.get("/documentos", autenticar, (req, res) =>
     req.usuario.papel === "admin"
       ? db
           .prepare(
-            "SELECT id,usuario_id,nome,mime,tamanho,status,observacao,criado_em FROM documentos ORDER BY id DESC",
+            "SELECT d.id,d.usuario_id,d.nome,d.mime,d.tamanho,d.status,d.observacao,d.criado_em,u.nome AS aluno,u.email AS aluno_email FROM documentos d JOIN usuarios u ON u.id=d.usuario_id ORDER BY d.id DESC",
           )
           .all()
       : db
