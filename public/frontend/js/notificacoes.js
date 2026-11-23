@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   const token = () => sessionStorage.getItem("techcampus_token");
-  const botao = document.querySelector(".notification-btn");
+  const botao = document.querySelector(".dropdown .notification-btn");
   if (!botao || botao.dataset.tcNotificacoes === "1") return;
   botao.dataset.tcNotificacoes = "1";
 
