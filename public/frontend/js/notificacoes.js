@@ -14,7 +14,9 @@
   menu.style.width = "min(380px, calc(100vw - 24px))";
   menu.style.maxHeight = "min(70vh, 560px)";
   menu.style.overflowY = "auto";
-  menu.style.backgroundColor = "#171b22";
+  menu.style.backgroundColor = "var(--bg-card, var(--bs-body-bg))";
+  menu.style.color = "var(--bs-body-color)";
+  menu.style.borderColor = "var(--bs-border-color)";
   menu.style.opacity = "1";
   menu.replaceChildren();
 
