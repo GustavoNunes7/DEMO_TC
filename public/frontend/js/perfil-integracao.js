@@ -528,35 +528,46 @@
     const notif = document.getElementById("notificacoesSistema");
     const notifEmail = document.getElementById("notificacoesEmail");
     const selectTema = document.getElementById("tema");
+    const telefone = document.getElementById("exibirTelefone");
+    const emailPrivado = document.getElementById("exibirEmail");
     const chave = "techcampusConfiguracoes";
     let prefs = {};
     try { prefs = JSON.parse(localStorage.getItem(chave) || "{}"); } catch { prefs = {}; }
-    if (notif && prefs.notificacoesSistema !== undefined) notif.checked = !!prefs.notificacoesSistema;
-    if (notifEmail && prefs.notificacoesEmail !== undefined) notifEmail.checked = !!prefs.notificacoesEmail;
     if (selectTema && window.TechCampusTema) selectTema.value = window.TechCampusTema.get();
-    if (notif && !notif.dataset.apiWired) {
-      notif.dataset.apiWired = "1";
-      notif.addEventListener("change", () => {
-        localStorage.setItem("tc_notificacoes_ativas", notif.checked ? "1" : "0");
+    if (notifEmail) notifEmail.checked = false; // envio por e-mail indisponível até configuração do provedor.
+    async function carregarPreferencias() {
+      try {
+        const p = await api("/preferencias");
+        if (notif) notif.checked = Number(p.notificacoes_sistema) === 1;
+        if (telefone) telefone.checked = Number(p.exibir_telefone) === 1;
+        if (emailPrivado) emailPrivado.checked = Number(p.exibir_email) === 1;
+        localStorage.setItem("tc_notificacoes_ativas", p.notificacoes_sistema ? "1" : "0");
         window.dispatchEvent(new CustomEvent("tc-preferencia-notificacoes"));
-      });
+      } catch (e) { avisar("Não foi possível carregar suas preferências: " + e.message, true); }
     }
+    carregarPreferencias();
     if (configForm && !configForm.dataset.apiWired) {
       configForm.dataset.apiWired = "1";
-      configForm.addEventListener("submit", (event) => {
+      configForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         const config = {
           notificacoesSistema: notif?.checked ?? true,
-          notificacoesEmail: notifEmail?.checked ?? true,
-          exibirTelefone: document.getElementById("exibirTelefone")?.checked ?? false,
-          exibirEmail: document.getElementById("exibirEmail")?.checked ?? false,
+          exibirTelefone: telefone?.checked ?? false,
+          exibirEmail: emailPrivado?.checked ?? false,
           tema: selectTema?.value || "escuro"
         };
-        localStorage.setItem(chave, JSON.stringify(config));
-        localStorage.setItem("tc_notificacoes_ativas", config.notificacoesSistema ? "1" : "0");
-        if (window.TechCampusTema) window.TechCampusTema.set(config.tema);
-        window.dispatchEvent(new CustomEvent("tc-preferencia-notificacoes"));
-        avisar("Configurações salvas.");
+        try {
+          await api("/preferencias", { method: "PATCH", body: JSON.stringify({
+            notificacoes_sistema: config.notificacoesSistema,
+            exibir_telefone: config.exibirTelefone,
+            exibir_email: config.exibirEmail
+          })});
+          localStorage.setItem(chave, JSON.stringify({tema:config.tema}));
+          localStorage.setItem("tc_notificacoes_ativas", config.notificacoesSistema ? "1" : "0");
+          if (window.TechCampusTema) window.TechCampusTema.set(config.tema);
+          window.dispatchEvent(new CustomEvent("tc-preferencia-notificacoes"));
+          avisar("Configurações e preferências de privacidade salvas.");
+        } catch(e) { avisar(e.message, true); }
       });
     }
 
