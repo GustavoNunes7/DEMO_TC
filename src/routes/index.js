@@ -1037,6 +1037,10 @@ r.patch("/notificacoes/:id/lida", autenticar, (req, res) => {
   res.json({ ok: true });
 });
 
+// Migração: registrar confirmação de visualização pelo administrador.
+const colunasDocumentos = db.prepare("PRAGMA table_info(documentos)").all().map((c) => c.name);
+if (!colunasDocumentos.includes("visualizado_em")) db.exec("ALTER TABLE documentos ADD COLUMN visualizado_em TEXT");
+if (!colunasDocumentos.includes("visualizado_por")) db.exec("ALTER TABLE documentos ADD COLUMN visualizado_por INTEGER REFERENCES usuarios(id)");
 // Documentos: arquivos privados, acesso autenticado, PDF/JPG/PNG até 50 MB
 const uploadDir = path.resolve(__dirname, "../../uploads");
 fs.mkdirSync(uploadDir, { recursive: true });
@@ -1159,7 +1163,7 @@ r.get("/documentos", autenticar, (req, res) =>
     req.usuario.papel === "admin"
       ? db
           .prepare(
-            "SELECT d.id,d.usuario_id,d.nome,d.mime,d.tamanho,d.status,d.observacao,d.criado_em,u.nome AS aluno,u.email AS aluno_email FROM documentos d JOIN usuarios u ON u.id=d.usuario_id ORDER BY d.id DESC",
+            "SELECT d.id,d.usuario_id,d.nome,d.mime,d.tamanho,d.status,d.observacao,d.criado_em,d.visualizado_em,d.visualizado_por,u.nome AS aluno,u.email AS aluno_email FROM documentos d JOIN usuarios u ON u.id=d.usuario_id ORDER BY d.id DESC",
           )
           .all()
       : db
@@ -1198,6 +1202,11 @@ r.delete("/documentos/:id", autenticar, (req, res) => {
     console.error("Erro ao excluir documento:", erro);
     res.status(500).json({ erro: "Não foi possível excluir o documento." });
   }
+});
+r.patch("/documentos/:id/visualizado", autenticar, admin, (req, res) => {
+ const d=get("documentos",positiveId(req.params.id)); if(!d)return res.sendStatus(404);
+ db.prepare("UPDATE documentos SET visualizado_em=COALESCE(visualizado_em,CURRENT_TIMESTAMP),visualizado_por=COALESCE(visualizado_por,?) WHERE id=?").run(req.usuario.id,d.id);
+ res.json({ok:true,documento:get("documentos",d.id)});
 });
 r.patch("/documentos/:id/status", autenticar, admin, (req, res) => {
   const d = get("documentos", positiveId(req.params.id));
