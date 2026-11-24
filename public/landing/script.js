@@ -522,7 +522,6 @@ document.addEventListener("DOMContentLoaded", function () {
     "formatura",
     "ajuda",
     "usuarios",
-    "admin-documentos",
     "perfil",
     "configuracoes",
   ];
