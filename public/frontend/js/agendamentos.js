@@ -86,6 +86,7 @@
       const submit=form.querySelector('[type="submit"]');
       submit.textContent=admin?"Confirmar agendamento":"Solicitar reserva";
     });
+    $("agendamentoData").addEventListener("change",()=>{const campo=$("tcJogoDevolucao");if(campo){campo.min=$("agendamentoData").value;if(campo.value<campo.min)campo.value=campo.min;}});
     form.addEventListener("submit",enviarReserva);
   }
   function montarPainelAdmin(){
