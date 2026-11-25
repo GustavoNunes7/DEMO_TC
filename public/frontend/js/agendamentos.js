@@ -44,7 +44,7 @@
     return [...document.querySelectorAll("#tcJogosLista input[data-jogo-id]:checked")].map(check=>({jogo_id:Number(check.dataset.jogoId),quantidade:Number(document.querySelector('[data-quantidade-jogo="'+check.dataset.jogoId+'"]').value)}));
   }
   function dataLocal(data,hora){return data+"T"+hora+":00";}
-  function fimUmaHora(inicio){const d=new Date(inicio);d.setHours(d.getHours()+1);return d.toISOString().slice(0,19);}
+  function fimUmaHora(inicio){const d=new Date(inicio);d.setHours(d.getHours()+1);const pad=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes())+":00";}
   function mensagem(texto,erro=false){const el=$("agendamentoMsg");if(el){el.textContent=texto;el.className="small mt-3 mb-0 "+(erro?"text-danger":"text-success");}}
   async function enviarReserva(event){
     event.preventDefault();
@@ -73,7 +73,7 @@
       $("agendamentoTipo").value=recurso;
       $("agendamentoTitulo").textContent=recurso==="Quadra"?"Agendar Quadra":"Reservar Jogos de Tabuleiro";
       const box=$("tcJogosEscolha");box.hidden=recurso!=="Jogos de Tabuleiro";
-      $("agendamentoData").min=new Date().toISOString().slice(0,10);
+      const hoje=new Date();$("agendamentoData").min=hoje.getFullYear()+"-"+String(hoje.getMonth()+1).padStart(2,"0")+"-"+String(hoje.getDate()).padStart(2,"0");
       $("agendamentoMsg").textContent="";
       form.reset();
       $("agendamentoTipo").value=recurso;
@@ -115,13 +115,13 @@
         row.append(name,count);stock.append(row);
       });
       const list=$("tcReservasAdminLista");list.replaceChildren();
-      const pendentes=reservas.filter(r=>r.status==="pendente"&&r.recurso==="Quadra");
+      const pendentes=reservas.filter(r=>r.status==="pendente");
       if(!pendentes.length){const p=document.createElement("p");p.className="small text-secondary";p.textContent="Nenhuma solicitação aguardando autorização.";list.append(p);}
       pendentes.forEach(r=>{
         const card=document.createElement("div");card.className="border border-secondary rounded p-3";
         const start=new Date(String(r.inicio).replace(" ","T")),end=new Date(String(r.fim).replace(" ","T"));
-        const title=document.createElement("strong");title.textContent="Quadra · "+start.toLocaleDateString("pt-BR")+" · "+start.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+"–"+end.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
-        const who=document.createElement("p");who.className="small text-secondary mb-2";who.textContent="Solicitante: "+(r.solicitante||"Aluno");
+        const title=document.createElement("strong");title.textContent=r.recurso+" · "+start.toLocaleDateString("pt-BR")+" · "+start.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+"–"+end.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+        const who=document.createElement("p");who.className="small text-secondary mb-2";who.textContent=(r.recurso==="Quadra"?"Solicitante: ":"Jogos solicitados: ")+(r.recurso==="Quadra"?(r.solicitante||"Aluno"):(r.jogos||"—"));
         const actions=document.createElement("div");actions.className="d-flex gap-2";
         [["aprovado","Autorizar","btn-success"],["rejeitado","Recusar","btn-outline-danger"]].forEach(([status,label,cls])=>{const b=document.createElement("button");b.type="button";b.className="btn btn-sm "+cls;b.textContent=label;b.addEventListener("click",()=>decidirReserva(r.id,status));actions.append(b);});
         card.append(title,who,actions);list.append(card);
