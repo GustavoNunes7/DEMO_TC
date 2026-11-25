@@ -35,6 +35,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const nomesMesesCurto = ["JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ"];
   const categorias = {evento:"Evento",academico:"Acadêmico",reuniao:"Reunião",importante:"Importante"};
   let avisos = [];
+  let reservasQuadra = [];
   let filtroAtual = "todos";
   let currentDate = new Date();
 
@@ -72,6 +73,30 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     }
     window.bootstrap.Modal.getOrCreateInstance(modalElement).show();
+  }
+  function abrirDetalheReserva(reserva) {
+    let modal=document.getElementById("tcReservaCalendarioModal");
+    if(!modal){
+      modal=document.createElement("div");
+      modal.id="tcReservaCalendarioModal";
+      modal.className="modal fade";
+      modal.tabIndex=-1;
+      modal.innerHTML='<div class="modal-dialog modal-dialog-centered"><div class="modal-content bg-dark text-white border border-secondary"><div class="modal-header border-secondary"><h5 class="modal-title">Reserva da quadra</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button></div><div class="modal-body"><div id="tcReservaCalendarioInfo"></div></div></div></div>';
+      document.body.append(modal);
+    }
+    const info=modal.querySelector("#tcReservaCalendarioInfo");
+    const data=new Date(String(reserva.inicio).replace(" ","T"));
+    const fim=new Date(String(reserva.fim).replace(" ","T"));
+    const status=reserva.status==="aprovado"?"Autorizado":reserva.status==="pendente"?"Aguardando autorização":reserva.status;
+    info.replaceChildren();
+    const linhas=[
+      ["Data",data.toLocaleDateString("pt-BR")],
+      ["Horário",data.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+" – "+fim.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})],
+      ["Informação",reserva.exibicao],
+      ["Status",status]
+    ];
+    linhas.forEach(([label,value])=>{const p=document.createElement("p");p.className="mb-2";const b=document.createElement("strong");b.textContent=label+": ";p.append(b,document.createTextNode(value||"—"));info.append(p);});
+    window.bootstrap?.Modal.getOrCreateInstance(modal).show();
   }
   function renderAgenda() {
     if (!agendaContainer) return;
@@ -113,6 +138,18 @@ document.addEventListener("DOMContentLoaded", async () => {
       event.addEventListener("click",(e)=>{e.stopPropagation();abrirAviso(aviso);});
       events.append(event);
     });
+    reservasQuadra.filter(r=>String(r.inicio||"").slice(0,10)===dateString).forEach(reserva=>{
+      const event=document.createElement("button");
+      event.type="button";
+      event.className="calendar-event importante tc-reserva-quadra";
+      event.title="Quadra: "+reserva.exibicao;
+      const label=document.createElement("span");
+      label.className="calendar-event-title";
+      label.textContent="Quadra · "+reserva.exibicao;
+      event.append(label);
+      event.addEventListener("click",e=>{e.stopPropagation();abrirDetalheReserva(reserva);});
+      events.append(event);
+    });
     element.append(events);
     if(avisosVisiveis.length){element.classList.add("has-events");element.tabIndex=0;element.setAttribute("role","button");element.setAttribute("aria-label",avisosVisiveis.length+" aviso(s) em "+formatarData(dateString));element.addEventListener("click",()=>abrirAviso(avisosVisiveis[0]));element.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();abrirAviso(avisosVisiveis[0]);}});}
     return element;
@@ -141,6 +178,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       const data = await response.json().catch(() => []);
       if (!response.ok) throw new Error("A API de avisos respondeu HTTP " + response.status + ". Reinicie o servidor com a versão atual do projeto.");
       if (!Array.isArray(data)) throw new Error("A API de avisos retornou um formato inesperado.");
+      const token=sessionStorage.getItem("techcampus_token")||"";
+      try {
+        const reservasResponse=await fetch("/api/agendamentos/calendario",{headers:{Authorization:"Bearer "+token},cache:"no-store"});
+        reservasQuadra=reservasResponse.ok?await reservasResponse.json():[];
+      } catch { reservasQuadra=[]; }
       avisos = data
         .filter(a => Number(a.publicado ?? 1) === 1)
         .map(a => ({
