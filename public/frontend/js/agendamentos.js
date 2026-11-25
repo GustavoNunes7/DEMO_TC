@@ -88,7 +88,7 @@
   function montarPainelAdmin(){
     const section=$("pedidos");if(!section||$("tcAdminAgendamentos"))return;
     const box=document.createElement("section");box.id="tcAdminAgendamentos";box.className="mt-5 p-3 p-lg-4 rounded-3 border border-secondary bg-dark text-white";
-    box.innerHTML='<div class="d-flex justify-content-between flex-wrap gap-2 align-items-center mb-3"><div><span class="text-danger small fw-bold text-uppercase">Administração</span><h3 class="fw-bold mb-1">Gestão de agendamentos</h3><p class="text-secondary small mb-0">Autorize reservas da quadra e controle os jogos disponíveis para empréstimo.</p></div><button class="btn btn-outline-secondary btn-sm" id="tcAtualizarAgendamentos" type="button"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar</button></div><div class="row g-3"><div class="col-12 col-xl-5"><div class="p-3 rounded border border-secondary h-100"><h5 class="fw-bold">Estoque de jogos</h5><form id="tcFormEstoque" class="d-grid gap-2"><input class="form-control bg-dark text-white border-secondary" id="tcJogoNome" maxlength="100" placeholder="Nome do jogo (ex.: Xadrez)" required><input class="form-control bg-dark text-white border-secondary" id="tcJogoDescricao" maxlength="300" placeholder="Descrição (opcional)"><label class="small" for="tcJogoQtd">Quantidade física disponível</label><input class="form-control bg-dark text-white border-secondary" id="tcJogoQtd" type="number" min="0" max="500" value="1" required><button class="btn btn-danger" type="submit">Salvar no estoque</button></form><div id="tcEstoqueAdminLista" class="d-grid gap-2 mt-3"></div><p id="tcEstoqueMsg" class="small mt-2 mb-0"></p></div></div><div class="col-12 col-xl-7"><div class="p-3 rounded border border-secondary h-100"><h5 class="fw-bold">Solicitações pendentes</h5><div id="tcReservasAdminLista" class="d-grid gap-2"><p class="small text-secondary">Carregando...</p></div></div></div></div>';
+    box.innerHTML='<div class="d-flex justify-content-between flex-wrap gap-2 align-items-center mb-3"><div><span class="text-danger small fw-bold text-uppercase">Administração</span><h3 class="fw-bold mb-1">Gestão de agendamentos</h3><p class="text-secondary small mb-0">Autorize reservas da quadra e controle os jogos disponíveis para empréstimo.</p></div><button class="btn btn-outline-secondary btn-sm" id="tcAtualizarAgendamentos" type="button"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar</button></div><div class="row g-3"><div class="col-12 col-xl-5"><div class="p-3 rounded border border-secondary h-100"><h5 class="fw-bold">Estoque de jogos</h5><form id="tcFormEstoque" class="d-grid gap-2"><input class="form-control bg-dark text-white border-secondary" id="tcJogoNome" maxlength="100" placeholder="Nome do jogo (ex.: Xadrez)" required><input class="form-control bg-dark text-white border-secondary" id="tcJogoDescricao" maxlength="300" placeholder="Descrição (opcional)"><label class="small" for="tcJogoQtd">Quantidade comprada/adicionada</label><input class="form-control bg-dark text-white border-secondary" id="tcJogoQtd" type="number" min="0" max="500" value="1" required><label class="small" for="tcJogoValor">Valor de reposição por unidade (R$)</label><input class="form-control bg-dark text-white border-secondary" id="tcJogoValor" type="number" min="0" step="0.01" value="0" required><button class="btn btn-danger" type="submit">Adicionar ao estoque</button><p class="small text-secondary mb-0">Atraso não gera multa diária. O valor é cobrado somente em caso de dano ou perda.</p></form><div id="tcEstoqueAdminLista" class="d-grid gap-2 mt-3"></div><p id="tcEstoqueMsg" class="small mt-2 mb-0"></p></div></div><div class="col-12 col-xl-7"><div class="p-3 rounded border border-secondary h-100"><h5 class="fw-bold">Solicitações pendentes</h5><div id="tcReservasAdminLista" class="d-grid gap-2"><p class="small text-secondary">Carregando...</p></div></div></div></div>';
     const cards=section.querySelector(".row.g-4.justify-content-center");
     (cards||section.firstElementChild)?.after(box);
     $("tcAtualizarAgendamentos").addEventListener("click",carregarPainelAdmin);
@@ -97,9 +97,9 @@
   async function salvarJogo(event){
     event.preventDefault();const msg=$("tcEstoqueMsg");
     try{
-      await api("/agendamentos/estoque",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome:$("tcJogoNome").value.trim(),descricao:$("tcJogoDescricao").value.trim(),quantidade:Number($("tcJogoQtd").value)})});
+      await api("/agendamentos/estoque",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome:$("tcJogoNome").value.trim(),descricao:$("tcJogoDescricao").value.trim(),quantidade:Number($("tcJogoQtd").value),valor_reposicao_centavos:Math.round(Number($("tcJogoValor").value)*100)})});
       msg.textContent="Estoque atualizado.";msg.className="small text-success mt-2";
-      $("tcFormEstoque").reset();$("tcJogoQtd").value=1;
+      $("tcFormEstoque").reset();$("tcJogoQtd").value=1;$("tcJogoValor").value=0;
       await carregarPainelAdmin();await carregarEstoque();
     }catch(e){msg.textContent=e.message;msg.className="small text-danger mt-2";}
   }
@@ -115,18 +115,38 @@
         row.append(name,count);stock.append(row);
       });
       const list=$("tcReservasAdminLista");list.replaceChildren();
-      const pendentes=reservas.filter(r=>r.status==="pendente");
-      if(!pendentes.length){const p=document.createElement("p");p.className="small text-secondary";p.textContent="Nenhuma solicitação aguardando autorização.";list.append(p);}
-      pendentes.forEach(r=>{
+      const abertas=reservas.filter(r=>r.status==="pendente"||(r.recurso==="Jogos de Tabuleiro"&&r.status==="aprovado"&&!r.devolvido_em));
+      if(!abertas.length){const p=document.createElement("p");p.className="small text-secondary";p.textContent="Nenhuma solicitação ou empréstimo em aberto.";list.append(p);}
+      abertas.forEach(r=>{
         const card=document.createElement("div");card.className="border border-secondary rounded p-3";
         const start=new Date(String(r.inicio).replace(" ","T")),end=new Date(String(r.fim).replace(" ","T"));
         const title=document.createElement("strong");title.textContent=r.recurso+" · "+start.toLocaleDateString("pt-BR")+" · "+start.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+"–"+end.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
-        const who=document.createElement("p");who.className="small text-secondary mb-2";who.textContent=(r.recurso==="Quadra"?"Solicitante: ":"Jogos solicitados: ")+(r.recurso==="Quadra"?(r.solicitante||"Aluno"):(r.jogos||"—"));
-        const actions=document.createElement("div");actions.className="d-flex gap-2";
-        [["aprovado","Autorizar","btn-success"],["rejeitado","Recusar","btn-outline-danger"]].forEach(([status,label,cls])=>{const b=document.createElement("button");b.type="button";b.className="btn btn-sm "+cls;b.textContent=label;b.addEventListener("click",()=>decidirReserva(r.id,status));actions.append(b);});
-        card.append(title,who,actions);list.append(card);
+        const who=document.createElement("p");who.className="small text-secondary mb-2";who.textContent="Aluno: "+(r.solicitante||"—")+" · "+(r.jogos||"Quadra");card.append(title,who);
+        if(r.recurso==="Jogos de Tabuleiro"&&r.status==="aprovado"){
+          const state=document.createElement("p");state.className="small mb-2 "+(r.atrasado?"text-danger":"text-secondary");state.textContent=r.atrasado?"EM ATRASO — prazo de devolução passou":(r.retirado_em?"Aguardando devolução":"Aguardando retirada");card.append(state);
+          const actions=document.createElement("div");actions.className="d-flex flex-wrap gap-2";
+          if(!r.retirado_em){const b=document.createElement("button");b.className="btn btn-sm btn-outline-info";b.textContent="Registrar retirada";b.onclick=()=>acaoEmprestimo(r.id,"retirada");actions.append(b);}
+          [["integro","Devolvido íntegro"],["danificado","Danificado"],["perdido","Perdido"]].forEach(([cond,label])=>{const b=document.createElement("button");b.className="btn btn-sm btn-outline-success";b.textContent=label;b.onclick=()=>devolverJogo(r.id,cond);actions.append(b);});
+          card.append(actions);
+        }else if(r.status==="pendente"){
+          const actions=document.createElement("div");actions.className="d-flex gap-2";
+          [["aprovado","Autorizar","btn-success"],["rejeitado","Recusar","btn-outline-danger"]].forEach(([status,label,cls])=>{const b=document.createElement("button");b.type="button";b.className="btn btn-sm "+cls;b.textContent=label;b.onclick=()=>decidirReserva(r.id,status);actions.append(b);});card.append(actions);
+        }
+        list.append(card);
       });
     }catch(e){$("tcReservasAdminLista").textContent=e.message;}
+  }
+  async function acaoEmprestimo(id,acao){
+    try{await api("/agendamentos/"+id+"/"+acao,{method:"PATCH"});await carregarPainelAdmin();}
+    catch(e){alert(e.message);}
+  }
+  async function devolverJogo(id,condicao){
+    if(!confirm("Confirmar registro da devolução: "+condicao+"?"))return;
+    try{
+      const resultado=await api("/agendamentos/"+id+"/devolucao",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({condicao})});
+      if(resultado.cobranca_centavos)alert("Cobrança de reposição: R$ "+(resultado.cobranca_centavos/100).toFixed(2).replace(".",","));
+      await carregarPainelAdmin();document.dispatchEvent(new CustomEvent("tc-avisos-atualizados"));
+    }catch(e){alert(e.message);}
   }
   async function decidirReserva(id,status){
     try{await api("/agendamentos/"+id+"/status",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});await carregarPainelAdmin();document.dispatchEvent(new CustomEvent("tc-avisos-atualizados"));}
