@@ -165,7 +165,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     filtroAtual = filtro || "todos";
     document.querySelectorAll(".avisos-filter").forEach(btn=>{const ativo=btn.dataset.filter===filtro;btn.classList.toggle("active",ativo);btn.classList.toggle("btn-danger",ativo);btn.classList.toggle("btn-outline-secondary",!ativo);});
     document.querySelectorAll("#agendaAvisos .agenda-item").forEach(item=>{item.style.display=filtroAtual==="todos"||item.dataset.category===filtroAtual?"flex":"none";});
-    document.querySelectorAll("#calendarDays .calendar-day").forEach(day=>{const events=[...day.querySelectorAll(".calendar-event")];events.forEach(event=>{event.style.display=filtroAtual==="todos"||event.classList.contains(filtroAtual)?"":"none";});const visible=events.some(event=>event.style.display!=="none");day.classList.toggle("has-events",visible);});
+    document.querySelectorAll("#calendarDays .calendar-day").forEach(day=>{const events=[...day.querySelectorAll(".calendar-event")];events.forEach(event=>{event.style.display=event.classList.contains("tc-reserva-quadra")||filtroAtual==="todos"||event.classList.contains(filtroAtual)?"":"none";});const visible=events.some(event=>event.style.display!=="none");day.classList.toggle("has-events",visible);});
     if(agendaEmpty){const visiveis=[...document.querySelectorAll("#agendaAvisos .agenda-item")].some(item=>item.style.display!=="none");agendaEmpty.classList.toggle("d-none",visiveis);}
   }
   document.querySelectorAll(".avisos-filter").forEach(button=>button.addEventListener("click",()=>aplicarFiltro(button.dataset.filter||"todos")));
