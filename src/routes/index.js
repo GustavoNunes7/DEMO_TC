@@ -1336,34 +1336,37 @@ catalogoJogosInicial.forEach(([nome,descricao])=>inserirJogoInicial.run(nome,des
 r.get("/agendamentos/estoque", autenticar, (req,res) => {
   const adminUser=req.usuario.papel==="admin";
   const sql=adminUser
-    ? "SELECT id,nome,descricao,quantidade_total,quantidade_disponivel,ativo FROM estoque_jogos WHERE ativo=1 ORDER BY nome"
-    : "SELECT id,nome,descricao,quantidade_disponivel FROM estoque_jogos WHERE ativo=1 AND quantidade_disponivel>0 ORDER BY nome";
+    ? "SELECT id,nome,descricao,quantidade_total,quantidade_disponivel,valor_reposicao_centavos,ativo FROM estoque_jogos WHERE ativo=1 ORDER BY nome"
+    : "SELECT id,nome,descricao,quantidade_disponivel,valor_reposicao_centavos FROM estoque_jogos WHERE ativo=1 AND quantidade_disponivel>0 ORDER BY nome";
   res.json(db.prepare(sql).all());
 });
 r.post("/agendamentos/estoque", autenticar, admin, (req,res) => {
   const nome=clean(req.body.nome,100), descricao=clean(req.body.descricao,300);
-  const quantidade=Number(req.body.quantidade);
-  if(!nome || !Number.isInteger(quantidade) || quantidade<0 || quantidade>500) return bad(res,"Informe o nome do jogo e uma quantidade válida.");
+  const quantidade=Number(req.body.quantidade), valor=Number(req.body.valor_reposicao_centavos||0);
+  if(!nome || !Number.isInteger(quantidade) || quantidade<0 || quantidade>500 || !Number.isInteger(valor) || valor<0) return bad(res,"Informe nome, quantidade e valor de reposição válidos.");
   const existente=db.prepare("SELECT * FROM estoque_jogos WHERE nome=?").get(nome);
   if(existente){
-    const reservado=existente.quantidade_total-existente.quantidade_disponivel;
-    if(quantidade<reservado) return bad(res,"A quantidade não pode ficar abaixo dos jogos já reservados.");
-    db.prepare("UPDATE estoque_jogos SET descricao=?,quantidade_total=?,quantidade_disponivel=?,ativo=1 WHERE id=?")
-      .run(descricao,quantidade,quantidade-reservado,existente.id);
+    db.prepare("UPDATE estoque_jogos SET descricao=?,quantidade_total=quantidade_total+?,quantidade_disponivel=quantidade_disponivel+?,valor_reposicao_centavos=?,ativo=1 WHERE id=?")
+      .run(descricao,quantidade,quantidade,valor,existente.id);
     return res.json(get("estoque_jogos",existente.id));
   }
-  const info=db.prepare("INSERT INTO estoque_jogos(nome,descricao,quantidade_total,quantidade_disponivel) VALUES(?,?,?,?)").run(nome,descricao,quantidade,quantidade);
+  const info=db.prepare("INSERT INTO estoque_jogos(nome,descricao,quantidade_total,quantidade_disponivel,valor_reposicao_centavos) VALUES(?,?,?,?,?)").run(nome,descricao,quantidade,quantidade,valor);
   res.status(201).json(get("estoque_jogos",info.lastInsertRowid));
 });
 r.get("/agendamentos", autenticar, (req,res) => {
   const adminUser=req.usuario.papel==="admin";
   const rows=adminUser
     ? db.prepare(`SELECT a.*,u.nome AS solicitante,
+      CASE WHEN a.recurso='Jogos de Tabuleiro' AND a.status='aprovado' AND a.devolvido_em IS NULL AND date(a.fim)<date('now') THEN 1 ELSE 0 END AS atrasado,
+      CASE WHEN a.recurso='Jogos de Tabuleiro' AND a.status='aprovado' AND a.devolvido_em IS NULL AND date(a.fim)<=date('now','-7 days') THEN 1 ELSE 0 END AS atraso_sete_dias,
       (SELECT group_concat(e.nome || ' × ' || aj.quantidade, ', ')
        FROM agendamento_jogos aj JOIN estoque_jogos e ON e.id=aj.jogo_id
        WHERE aj.agendamento_id=a.id) AS jogos
       FROM agendamentos a JOIN usuarios u ON u.id=a.usuario_id ORDER BY a.inicio DESC`).all()
-    : db.prepare("SELECT a.id,a.recurso,a.inicio,a.fim,a.status,a.criado_em FROM agendamentos a WHERE a.usuario_id=? ORDER BY a.inicio DESC").all(req.usuario.id);
+    : db.prepare(`SELECT a.id,a.recurso,a.inicio,a.fim,a.status,a.criado_em,a.retirado_em,a.devolvido_em,a.cobranca_centavos,a.cobranca_motivo,
+      CASE WHEN a.recurso='Jogos de Tabuleiro' AND a.status='aprovado' AND a.devolvido_em IS NULL AND date(a.fim)<date('now') THEN 1 ELSE 0 END AS atrasado,
+      (SELECT group_concat(e.nome || ' × ' || aj.quantidade, ', ') FROM agendamento_jogos aj JOIN estoque_jogos e ON e.id=aj.jogo_id WHERE aj.agendamento_id=a.id) AS jogos
+      FROM agendamentos a WHERE a.usuario_id=? ORDER BY a.inicio DESC`).all(req.usuario.id);
   res.json(rows);
 });
 r.get("/agendamentos/calendario", autenticar, (req,res) => {
@@ -1377,10 +1380,24 @@ r.get("/agendamentos/calendario", autenticar, (req,res) => {
   `).all();
   res.json(rows);
 });
+function atualizarBloqueioEmprestimos(usuarioId){
+  const atraso=db.prepare(`SELECT MIN(date(a.fim)) AS vencimento
+    FROM agendamentos a WHERE a.usuario_id=? AND a.recurso='Jogos de Tabuleiro'
+    AND a.status='aprovado' AND a.devolvido_em IS NULL AND date(a.fim)<=date('now','-7 days')`).get(usuarioId);
+  if(atraso?.vencimento){
+    db.prepare("UPDATE usuarios SET emprestimos_bloqueado_ate=MAX(COALESCE(emprestimos_bloqueado_ate,''),date('now','+30 days')) WHERE id=?").run(usuarioId);
+  }
+  const u=get("usuarios",usuarioId);
+  return u?.emprestimos_bloqueado_ate && u.emprestimos_bloqueado_ate>=new Date().toISOString().slice(0,10) ? u.emprestimos_bloqueado_ate : null;
+}
 r.post("/agendamentos", autenticar, (req, res) => {
   const recurso=clean(req.body.recurso,120), inicio=clean(req.body.inicio,40), fim=clean(req.body.fim,40);
   if(!allowed(recurso,["Quadra","Jogos de Tabuleiro"]) || !Number.isFinite(Date.parse(inicio)) || !Number.isFinite(Date.parse(fim)) || Date.parse(inicio)>=Date.parse(fim) || Date.parse(inicio)<Date.now()) return bad(res,"Recurso ou período inválido.");
   const adminUser=req.usuario.papel==="admin";
+  if(recurso==="Jogos de Tabuleiro" && !adminUser){
+    const bloqueio=atualizarBloqueioEmprestimos(req.usuario.id);
+    if(bloqueio) return res.status(403).json({erro:"Você está temporariamente impedido de solicitar empréstimos até "+bloqueio+" por atraso anterior."});
+  }
   const ocupado=recurso==="Quadra" ? db.prepare("SELECT id FROM agendamentos WHERE recurso=? AND status IN ('pendente','aprovado') AND inicio<? AND fim>?").get(recurso,fim,inicio) : null;
   if(ocupado) return res.status(409).json({erro:"Horário já reservado."});
   const jogos=Array.isArray(req.body.jogos)?req.body.jogos:[];
@@ -1406,6 +1423,28 @@ r.post("/agendamentos", autenticar, (req, res) => {
   try{id=criar();}catch(error){return res.status(409).json({erro:error.message});}
   if(!adminUser) notificarAdmins("Nova solicitação de agendamento",`Solicitação #${id} para ${recurso} aguardando autorização.`);
   res.status(201).json(get("agendamentos",id));
+});
+r.patch("/agendamentos/:id/retirada", autenticar, admin, (req,res) => {
+  const ag=get("agendamentos",positiveId(req.params.id));
+  if(!ag || ag.recurso!=="Jogos de Tabuleiro" || ag.status!=="aprovado" || ag.retirado_em) return res.status(409).json({erro:"Empréstimo não está pronto para retirada."});
+  db.prepare("UPDATE agendamentos SET retirado_em=CURRENT_TIMESTAMP WHERE id=?").run(ag.id);
+  res.json(get("agendamentos",ag.id));
+});
+r.patch("/agendamentos/:id/devolucao", autenticar, admin, (req,res) => {
+  const id=positiveId(req.params.id), ag=get("agendamentos",id);
+  if(!ag || ag.recurso!=="Jogos de Tabuleiro" || ag.status!=="aprovado" || ag.devolvido_em) return res.status(409).json({erro:"Empréstimo não está aguardando devolução."});
+  const condicao=req.body.condicao;
+  if(!allowed(condicao,["integro","danificado","perdido"])) return bad(res,"Informe se o jogo foi devolvido íntegro, danificado ou perdido.");
+  const itens=db.prepare("SELECT aj.jogo_id,aj.quantidade,e.valor_reposicao_centavos,e.nome FROM agendamento_jogos aj JOIN estoque_jogos e ON e.id=aj.jogo_id WHERE aj.agendamento_id=?").all(id);
+  const cobranca=condicao==="integro"?0:itens.reduce((s,i)=>s+i.valor_reposicao_centavos*i.quantidade,0);
+  if(condicao!=="integro" && cobranca<=0) return bad(res,"Cadastre o valor de reposição dos jogos antes de registrar perda ou dano.");
+  const tx=db.transaction(()=>{
+    db.prepare("UPDATE agendamentos SET devolvido_em=CURRENT_TIMESTAMP,cobranca_centavos=?,cobranca_motivo=? WHERE id=?").run(cobranca,condicao==="integro"?null:condicao,id);
+    if(condicao==="integro") for(const item of itens) db.prepare("UPDATE estoque_jogos SET quantidade_disponivel=MIN(quantidade_total,quantidade_disponivel+?) WHERE id=?").run(item.quantidade,item.jogo_id);
+  });
+  tx();
+  db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)").run(ag.usuario_id,"Devolução registrada",condicao==="integro"?"Seu empréstimo foi devolvido e o estoque atualizado.": "Foi registrada cobrança de reposição no valor de R$ "+(cobranca/100).toFixed(2).replace(".",",")+".");
+  res.json({ok:true,cobranca_centavos:cobranca,agendamento:get("agendamentos",id)});
 });
 r.patch("/agendamentos/:id/status", autenticar, admin, (req,res) => {
   const id=positiveId(req.params.id), novo=req.body.status;
