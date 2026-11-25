@@ -18,7 +18,7 @@
     if(!form||!body||$("tcJogosEscolha"))return;
     const box=document.createElement("div");
     box.id="tcJogosEscolha";box.className="mt-3";box.hidden=true;
-    box.innerHTML='<label class="form-label fw-bold">Escolha os jogos disponíveis</label><div class="small text-secondary mb-2">Selecione os jogos e a quantidade desejada. A solicitação dependerá da autorização da administração.</div><div id="tcJogosLista" class="d-grid gap-2"></div>';
+    box.innerHTML='<label class="form-label fw-bold">Escolha os jogos disponíveis</label><div class="small text-secondary mb-2">Selecione os jogos e a quantidade desejada. A solicitação dependerá da autorização da administração.</div><div id="tcJogosLista" class="d-grid gap-2"></div><label class="form-label fw-bold mt-3" for="tcJogoDevolucao">Data limite para devolução</label><input id="tcJogoDevolucao" type="date" class="form-control bg-dark text-white border-secondary"><div class="small text-secondary mt-1">Combine a data de devolução com a administração.</div>';
     body.insertBefore(box,$("agendamentoMsg"));
   }
   async function carregarEstoque(){
@@ -52,9 +52,11 @@
     const data=$("agendamentoData").value,horario=$("agendamentoHorario").value;
     if(!data||!horario)return mensagem("Selecione data e horário.",true);
     const inicio=dataLocal(data,horario);
-    const fim=fimUmaHora(inicio);
     const jogos=recurso==="Jogos de Tabuleiro"?selecionados():[];
     if(recurso==="Jogos de Tabuleiro"&&!jogos.length)return mensagem("Selecione pelo menos um jogo.",true);
+    const dataDevolucao=$("tcJogoDevolucao")?.value;
+    const fim=recurso==="Jogos de Tabuleiro"?(dataDevolucao?dataDevolucao+"T23:59:00":""):fimUmaHora(inicio);
+    if(recurso==="Jogos de Tabuleiro"&&(!dataDevolucao||Date.parse(fim)<=Date.parse(inicio)))return mensagem("Informe uma data de devolução posterior à retirada.",true);
     const button=$("formAgendamento").querySelector('[type="submit"]');button.disabled=true;
     try{
       const reserva=await api("/agendamentos",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({recurso,inicio,fim,jogos})});
@@ -78,6 +80,7 @@
       form.reset();
       $("agendamentoTipo").value=recurso;
       if(recurso==="Jogos de Tabuleiro"){
+        const devolucao=$("tcJogoDevolucao");devolucao.min=$("agendamentoData").value;const amanha=new Date();amanha.setDate(amanha.getDate()+1);devolucao.value=amanha.getFullYear()+"-"+String(amanha.getMonth()+1).padStart(2,"0")+"-"+String(amanha.getDate()).padStart(2,"0");
         try{await carregarEstoque();}catch(e){mensagem(e.message,true);}
       }
       const submit=form.querySelector('[type="submit"]');
