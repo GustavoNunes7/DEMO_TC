@@ -1373,7 +1373,7 @@ r.post("/agendamentos", autenticar, (req, res) => {
   const recurso=clean(req.body.recurso,120), inicio=clean(req.body.inicio,40), fim=clean(req.body.fim,40);
   if(!allowed(recurso,["Quadra","Jogos de Tabuleiro"]) || !Number.isFinite(Date.parse(inicio)) || !Number.isFinite(Date.parse(fim)) || Date.parse(inicio)>=Date.parse(fim) || Date.parse(inicio)<Date.now()) return bad(res,"Recurso ou período inválido.");
   const adminUser=req.usuario.papel==="admin";
-  const ocupado=db.prepare("SELECT id FROM agendamentos WHERE recurso=? AND status IN ('pendente','aprovado') AND inicio<? AND fim>?").get(recurso,fim,inicio);
+  const ocupado=recurso==="Quadra" ? db.prepare("SELECT id FROM agendamentos WHERE recurso=? AND status IN ('pendente','aprovado') AND inicio<? AND fim>?").get(recurso,fim,inicio) : null;
   if(ocupado) return res.status(409).json({erro:"Horário já reservado."});
   const jogos=Array.isArray(req.body.jogos)?req.body.jogos:[];
   if(recurso==="Jogos de Tabuleiro" && !jogos.length) return bad(res,"Selecione pelo menos um jogo disponível.");
