@@ -1316,11 +1316,18 @@ const catalogoJogosInicial = [
   ["Xadrez","Jogo de estratégia para dois participantes."],
   ["Damas","Jogo clássico de estratégia."],
   ["Dominó","Conjunto de peças para partidas em grupo."],
-  ["UNO","Jogo de cartas de cores e números."],
+  ["Cartas de UNO","Jogo de cartas de cores e números."],
   ["Baralho","Baralho tradicional para jogos diversos."],
   ["Ludo","Jogo de percurso para até quatro participantes."],
+  ["Jogo Imobiliário","Jogo de estratégia, compra e negociação de propriedades."],
   ["Banco Imobiliário","Jogo de estratégia e negociação."],
-  ["Jogo da Vida","Jogo de percurso e escolhas."]
+  ["Jogo da Vida","Jogo de percurso e escolhas."],
+  ["Twister","Jogo de equilíbrio e coordenação com tapete colorido."],
+  ["Imagem & Ação","Jogo de desenho e adivinhação em equipes."],
+  ["Detetive","Jogo de investigação e dedução."],
+  ["Cara a Cara","Jogo de perguntas e dedução de personagens."],
+  ["Pula Pirata","Jogo de suspense e coordenação."],
+  ["Cai Não Cai","Jogo de habilidade e equilíbrio."]
 ];
 const inserirJogoInicial = db.prepare("INSERT OR IGNORE INTO estoque_jogos(nome,descricao,quantidade_total,quantidade_disponivel) VALUES(?,?,0,0)");
 catalogoJogosInicial.forEach(([nome,descricao])=>inserirJogoInicial.run(nome,descricao));
