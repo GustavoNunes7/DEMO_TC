@@ -187,6 +187,8 @@
   }
 
   dropdown?.addEventListener("shown.bs.dropdown", carregar);
+  carregar();
+  window.setInterval(carregar, 60000);
   atualizar.addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
