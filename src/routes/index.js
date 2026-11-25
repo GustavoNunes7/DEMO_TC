@@ -1432,7 +1432,7 @@ r.patch("/agendamentos/:id/retirada", autenticar, admin, (req,res) => {
 });
 r.patch("/agendamentos/:id/devolucao", autenticar, admin, (req,res) => {
   const id=positiveId(req.params.id), ag=get("agendamentos",id);
-  if(!ag || ag.recurso!=="Jogos de Tabuleiro" || ag.status!=="aprovado" || ag.devolvido_em) return res.status(409).json({erro:"Empréstimo não está aguardando devolução."});
+  if(!ag || ag.recurso!=="Jogos de Tabuleiro" || ag.status!=="aprovado" || !ag.retirado_em || ag.devolvido_em) return res.status(409).json({erro:"Empréstimo precisa estar retirado e ainda não devolvido."});
   const condicao=req.body.condicao;
   if(!allowed(condicao,["integro","danificado","perdido"])) return bad(res,"Informe se o jogo foi devolvido íntegro, danificado ou perdido.");
   const itens=db.prepare("SELECT aj.jogo_id,aj.quantidade,e.valor_reposicao_centavos,e.nome FROM agendamento_jogos aj JOIN estoque_jogos e ON e.id=aj.jogo_id WHERE aj.agendamento_id=?").all(id);
