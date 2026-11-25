@@ -185,7 +185,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         const reservasResponse=await fetch("/api/agendamentos/calendario",{headers:{Authorization:"Bearer "+token},cache:"no-store"});
         reservasQuadra=reservasResponse.ok?await reservasResponse.json():[];
       } catch { reservasQuadra=[]; }
-      avisos = data
+      const avisosUnicos = new Map();
+      data
         .filter(a => Number(a.publicado ?? 1) === 1)
         .map(a => ({
           id: Number(a.id),
@@ -197,7 +198,12 @@ document.addEventListener("DOMContentLoaded", async () => {
           descricao: String(a.conteudo || ""),
           ocorrido: Number(a.ocorrido || 0)
         }))
-        .filter(a => /^\d{4}-\d{2}-\d{2}$/.test(a.data));
+        .filter(a => /^\d{4}-\d{2}-\d{2}$/.test(a.data))
+        .forEach(a => {
+          const chave = [a.titulo,a.data,a.horario,a.local,a.descricao].map(v=>String(v||"").trim().toLocaleLowerCase("pt-BR")).join("|");
+          if (!avisosUnicos.has(chave)) avisosUnicos.set(chave,a);
+        });
+      avisos = [...avisosUnicos.values()];
       if (dataAlvo && /^\d{4}-\d{2}-\d{2}$/.test(dataAlvo)) {
         const [ano, mes] = dataAlvo.split("-").map(Number);
         currentDate = new Date(ano, mes - 1, 1);
