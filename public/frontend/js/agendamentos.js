@@ -25,7 +25,7 @@
     estoque=await api("/agendamentos/estoque");
     const lista=$("tcJogosLista");if(!lista)return;
     lista.replaceChildren();
-    if(!estoque.length){const p=document.createElement("p");p.className="small text-warning";p.textContent="Não há jogos disponíveis no estoque no momento.";lista.append(p);return;}
+    if(!estoque.length){const p=document.createElement("p");p.className="small text-warning";p.textContent="O estoque ainda não foi cadastrado pela administração. Peça para o responsável atualizar as quantidades.";lista.append(p);return;}
     estoque.forEach(jogo=>{
       const row=document.createElement("label");row.className="d-flex align-items-center justify-content-between gap-3 p-2 rounded border border-secondary";
       const left=document.createElement("span");left.className="d-flex flex-column";
