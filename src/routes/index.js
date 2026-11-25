@@ -1366,7 +1366,7 @@ r.get("/agendamentos/calendario", autenticar, (req,res) => {
     FROM agendamentos a JOIN usuarios u ON u.id=a.usuario_id
     WHERE a.status IN ('pendente','aprovado') AND a.recurso='Quadra'
     ORDER BY a.inicio
-  `).all(req.usuario.id);
+  `).all();
   res.json(rows);
 });
 r.post("/agendamentos", autenticar, (req, res) => {
