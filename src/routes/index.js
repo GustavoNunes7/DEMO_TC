@@ -1350,11 +1350,11 @@ r.post("/agendamentos/estoque", autenticar, admin, (req,res) => {
 r.get("/agendamentos", autenticar, (req,res) => {
   const adminUser=req.usuario.papel==="admin";
   const rows=adminUser
-    ? db.prepare("SELECT a.*,u.nome AS solicitante,
+    ? db.prepare(`SELECT a.*,u.nome AS solicitante,
       (SELECT group_concat(e.nome || ' × ' || aj.quantidade, ', ')
        FROM agendamento_jogos aj JOIN estoque_jogos e ON e.id=aj.jogo_id
        WHERE aj.agendamento_id=a.id) AS jogos
-      FROM agendamentos a JOIN usuarios u ON u.id=a.usuario_id ORDER BY a.inicio DESC").all()
+      FROM agendamentos a JOIN usuarios u ON u.id=a.usuario_id ORDER BY a.inicio DESC`).all()
     : db.prepare("SELECT a.id,a.recurso,a.inicio,a.fim,a.status,a.criado_em FROM agendamentos a WHERE a.usuario_id=? ORDER BY a.inicio DESC").all(req.usuario.id);
   res.json(rows);
 });
