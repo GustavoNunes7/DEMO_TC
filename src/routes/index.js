@@ -1331,6 +1331,8 @@ const catalogoJogosInicial = [
 ];
 const inserirJogoInicial = db.prepare("INSERT OR IGNORE INTO estoque_jogos(nome,descricao,quantidade_total,quantidade_disponivel) VALUES(?,?,0,0)");
 catalogoJogosInicial.forEach(([nome,descricao])=>inserirJogoInicial.run(nome,descricao));
+// Estoque demonstrativo inicial: o administrador deve ajustar as quantidades ao inventário físico real.
+db.prepare("UPDATE estoque_jogos SET quantidade_total=1, quantidade_disponivel=1 WHERE quantidade_total=0 AND quantidade_disponivel=0 AND NOT EXISTS (SELECT 1 FROM agendamento_jogos aj WHERE aj.jogo_id=estoque_jogos.id)").run();
 
 r.get("/agendamentos/estoque", autenticar, (req,res) => {
   const adminUser=req.usuario.papel==="admin";
