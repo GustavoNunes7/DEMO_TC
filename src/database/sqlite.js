@@ -156,6 +156,25 @@ CREATE TABLE IF NOT EXISTS despesas_financeiras (
 );
 CREATE INDEX IF NOT EXISTS idx_despesas_data ON despesas_financeiras(data_despesa);
 CREATE INDEX IF NOT EXISTS idx_mov_estoque_produto_data ON movimentacoes_estoque(produto_id,criado_em);
+
+CREATE TABLE IF NOT EXISTS estoque_jogos (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ nome TEXT NOT NULL UNIQUE,
+ descricao TEXT DEFAULT '',
+ quantidade_total INTEGER NOT NULL DEFAULT 0 CHECK(quantidade_total >= 0),
+ quantidade_disponivel INTEGER NOT NULL DEFAULT 0 CHECK(quantidade_disponivel >= 0),
+ ativo INTEGER NOT NULL DEFAULT 1 CHECK(ativo IN (0,1)),
+ criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS agendamento_jogos (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ agendamento_id INTEGER NOT NULL REFERENCES agendamentos(id) ON DELETE CASCADE,
+ jogo_id INTEGER NOT NULL REFERENCES estoque_jogos(id),
+ quantidade INTEGER NOT NULL CHECK(quantidade > 0)
+);
+CREATE INDEX IF NOT EXISTS idx_agendamentos_periodo ON agendamentos(recurso,inicio,fim,status);
+CREATE INDEX IF NOT EXISTS idx_agendamento_jogos_agendamento ON agendamento_jogos(agendamento_id);
+
 `);
 
 const colunasPedidos = db.prepare("PRAGMA table_info(pedidos)").all().map((c) => c.name);
