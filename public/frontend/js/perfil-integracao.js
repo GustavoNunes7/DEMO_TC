@@ -463,8 +463,6 @@
         const el = document.getElementById(id);
         if (el) el.value = value || "";
       }
-      const funcao = document.getElementById("perfilFuncao");
-      if (funcao) funcao.value = perfilAtual.papel === "admin" ? (perfilAtual.admin_lider ? "Administrador · Liderança" : "Administrador") : "Aluno";
       if (perfilAtual.papel === "aluno") {
         ["nome", "email", "matricula", "dataNascimento", "cpf"].forEach(id => {
           const el = document.getElementById(id);
@@ -502,10 +500,6 @@
                 observacao: document.getElementById("observacao")?.value || ""
               };
           const atualizado = await api("/perfil", { method: "PATCH", body: JSON.stringify(dados) });
-          await api("/preferencias", { method: "PATCH", body: JSON.stringify({
-            exibir_telefone: document.getElementById("exibirTelefone")?.checked ?? false,
-            exibir_email: document.getElementById("exibirEmail")?.checked ?? false
-          })});
           const nomeExibicao = (atualizado.nome_preferencia || "").trim() || (atualizado.nome || "Aluno").trim().split(/\s+/)[0];
           const nomeTopo = document.querySelector("#userDropdown .fw-semibold");
           if (nomeTopo) nomeTopo.textContent = nomeExibicao;
