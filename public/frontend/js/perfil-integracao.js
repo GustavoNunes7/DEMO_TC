@@ -463,6 +463,8 @@
         const el = document.getElementById(id);
         if (el) el.value = value || "";
       }
+      const funcao = document.getElementById("perfilFuncao");
+      if (funcao) funcao.value = perfilAtual.papel === "admin" ? (perfilAtual.admin_lider ? "Administrador · Liderança" : "Administrador") : "Aluno";
       if (perfilAtual.papel === "aluno") {
         ["nome", "email", "matricula", "dataNascimento", "cpf"].forEach(id => {
           const el = document.getElementById(id);
@@ -500,6 +502,10 @@
                 observacao: document.getElementById("observacao")?.value || ""
               };
           const atualizado = await api("/perfil", { method: "PATCH", body: JSON.stringify(dados) });
+          await api("/preferencias", { method: "PATCH", body: JSON.stringify({
+            exibir_telefone: document.getElementById("exibirTelefone")?.checked ?? false,
+            exibir_email: document.getElementById("exibirEmail")?.checked ?? false
+          })});
           const nomeExibicao = (atualizado.nome_preferencia || "").trim() || (atualizado.nome || "Aluno").trim().split(/\s+/)[0];
           const nomeTopo = document.querySelector("#userDropdown .fw-semibold");
           if (nomeTopo) nomeTopo.textContent = nomeExibicao;
@@ -552,15 +558,11 @@
         event.preventDefault();
         const config = {
           notificacoesSistema: notif?.checked ?? true,
-          exibirTelefone: telefone?.checked ?? false,
-          exibirEmail: emailPrivado?.checked ?? false,
           tema: selectTema?.value || "escuro"
         };
         try {
           await api("/preferencias", { method: "PATCH", body: JSON.stringify({
-            notificacoes_sistema: config.notificacoesSistema,
-            exibir_telefone: config.exibirTelefone,
-            exibir_email: config.exibirEmail
+            notificacoes_sistema: config.notificacoesSistema
           })});
           localStorage.setItem(chave, JSON.stringify({tema:config.tema}));
           localStorage.setItem("tc_notificacoes_ativas", config.notificacoesSistema ? "1" : "0");
