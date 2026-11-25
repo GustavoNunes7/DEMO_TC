@@ -177,6 +177,17 @@ CREATE INDEX IF NOT EXISTS idx_agendamento_jogos_agendamento ON agendamento_jogo
 
 `);
 
+// Migrações do catálogo e do ciclo de empréstimo de jogos.
+const colunasEstoqueJogos = db.prepare("PRAGMA table_info(estoque_jogos)").all().map((c) => c.name);
+if (!colunasEstoqueJogos.includes("valor_reposicao_centavos")) db.exec("ALTER TABLE estoque_jogos ADD COLUMN valor_reposicao_centavos INTEGER NOT NULL DEFAULT 0 CHECK(valor_reposicao_centavos >= 0)");
+const colunasAgendamentosJogos = db.prepare("PRAGMA table_info(agendamentos)").all().map((c) => c.name);
+if (!colunasAgendamentosJogos.includes("retirado_em")) db.exec("ALTER TABLE agendamentos ADD COLUMN retirado_em TEXT");
+if (!colunasAgendamentosJogos.includes("devolvido_em")) db.exec("ALTER TABLE agendamentos ADD COLUMN devolvido_em TEXT");
+if (!colunasAgendamentosJogos.includes("cobranca_centavos")) db.exec("ALTER TABLE agendamentos ADD COLUMN cobranca_centavos INTEGER NOT NULL DEFAULT 0");
+if (!colunasAgendamentosJogos.includes("cobranca_motivo")) db.exec("ALTER TABLE agendamentos ADD COLUMN cobranca_motivo TEXT");
+const colunasUsuariosJogos = db.prepare("PRAGMA table_info(usuarios)").all().map((c) => c.name);
+if (!colunasUsuariosJogos.includes("emprestimos_bloqueado_ate")) db.exec("ALTER TABLE usuarios ADD COLUMN emprestimos_bloqueado_ate TEXT");
+
 const colunasPedidos = db.prepare("PRAGMA table_info(pedidos)").all().map((c) => c.name);
 if (!colunasPedidos.includes("chave_idempotencia")) db.exec("ALTER TABLE pedidos ADD COLUMN chave_idempotencia TEXT");
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_pedidos_idempotencia_usuario ON pedidos(usuario_id,chave_idempotencia) WHERE chave_idempotencia IS NOT NULL");
