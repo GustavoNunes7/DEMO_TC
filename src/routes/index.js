@@ -1361,7 +1361,7 @@ r.get("/agendamentos", autenticar, (req,res) => {
 r.get("/agendamentos/calendario", autenticar, (req,res) => {
   const rows=db.prepare(`
     SELECT a.id,a.recurso,a.inicio,a.fim,a.status,
-      CASE WHEN u.papel='admin' THEN 'Agendado pela Administração' WHEN a.usuario_id=? THEN 'Você' ELSE 'Reservado por Aluno' END AS exibicao,
+      CASE WHEN u.papel='admin' THEN 'Agendado pela Administração' ELSE 'Reservado por Aluno' END AS exibicao,
       CASE WHEN u.papel='admin' THEN 1 ELSE 0 END AS criado_admin
     FROM agendamentos a JOIN usuarios u ON u.id=a.usuario_id
     WHERE a.status IN ('pendente','aprovado') AND a.recurso='Quadra'
