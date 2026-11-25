@@ -1036,6 +1036,12 @@ r.patch("/notificacoes/:id/lida", autenticar, (req, res) => {
   if (!result.changes) return res.sendStatus(404);
   res.json({ ok: true });
 });
+r.delete("/notificacoes/:id", autenticar, (req, res) => {
+  const result = db.prepare("DELETE FROM notificacoes WHERE id=? AND usuario_id=?")
+    .run(positiveId(req.params.id), req.usuario.id);
+  if (!result.changes) return res.sendStatus(404);
+  res.json({ ok: true });
+});
 
 // Migração: registrar confirmação de visualização pelo administrador.
 const colunasDocumentos = db.prepare("PRAGMA table_info(documentos)").all().map((c) => c.name);
