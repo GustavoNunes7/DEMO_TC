@@ -1311,34 +1311,105 @@ r.delete("/formatura/:id", autenticar, admin, (req, res) => {
   res.status(info.changes ? 204 : 404).end();
 });
 
-// Agendamentos
+// Agendamentos de quadra e empréstimo de jogos.
+const catalogoJogosInicial = [
+  ["Xadrez","Jogo de estratégia para dois participantes."],
+  ["Damas","Jogo clássico de estratégia."],
+  ["Dominó","Conjunto de peças para partidas em grupo."],
+  ["UNO","Jogo de cartas de cores e números."],
+  ["Baralho","Baralho tradicional para jogos diversos."],
+  ["Ludo","Jogo de percurso para até quatro participantes."],
+  ["Banco Imobiliário","Jogo de estratégia e negociação."],
+  ["Jogo da Vida","Jogo de percurso e escolhas."]
+];
+const inserirJogoInicial = db.prepare("INSERT OR IGNORE INTO estoque_jogos(nome,descricao,quantidade_total,quantidade_disponivel) VALUES(?,?,0,0)");
+catalogoJogosInicial.forEach(([nome,descricao])=>inserirJogoInicial.run(nome,descricao));
+
+r.get("/agendamentos/estoque", autenticar, (req,res) => {
+  const adminUser=req.usuario.papel==="admin";
+  const sql=adminUser
+    ? "SELECT id,nome,descricao,quantidade_total,quantidade_disponivel,ativo FROM estoque_jogos WHERE ativo=1 ORDER BY nome"
+    : "SELECT id,nome,descricao,quantidade_disponivel FROM estoque_jogos WHERE ativo=1 AND quantidade_disponivel>0 ORDER BY nome";
+  res.json(db.prepare(sql).all());
+});
+r.post("/agendamentos/estoque", autenticar, admin, (req,res) => {
+  const nome=clean(req.body.nome,100), descricao=clean(req.body.descricao,300);
+  const quantidade=Number(req.body.quantidade);
+  if(!nome || !Number.isInteger(quantidade) || quantidade<0 || quantidade>500) return bad(res,"Informe o nome do jogo e uma quantidade válida.");
+  const existente=db.prepare("SELECT * FROM estoque_jogos WHERE nome=?").get(nome);
+  if(existente){
+    const reservado=existente.quantidade_total-existente.quantidade_disponivel;
+    if(quantidade<reservado) return bad(res,"A quantidade não pode ficar abaixo dos jogos já reservados.");
+    db.prepare("UPDATE estoque_jogos SET descricao=?,quantidade_total=?,quantidade_disponivel=?,ativo=1 WHERE id=?")
+      .run(descricao,quantidade,quantidade-reservado,existente.id);
+    return res.json(get("estoque_jogos",existente.id));
+  }
+  const info=db.prepare("INSERT INTO estoque_jogos(nome,descricao,quantidade_total,quantidade_disponivel) VALUES(?,?,?,?)").run(nome,descricao,quantidade,quantidade);
+  res.status(201).json(get("estoque_jogos",info.lastInsertRowid));
+});
+r.get("/agendamentos", autenticar, (req,res) => {
+  const adminUser=req.usuario.papel==="admin";
+  const rows=adminUser
+    ? db.prepare("SELECT a.*,u.nome AS solicitante FROM agendamentos a JOIN usuarios u ON u.id=a.usuario_id ORDER BY a.inicio DESC").all()
+    : db.prepare("SELECT a.id,a.recurso,a.inicio,a.fim,a.status,a.criado_em FROM agendamentos a WHERE a.usuario_id=? ORDER BY a.inicio DESC").all(req.usuario.id);
+  res.json(rows);
+});
+r.get("/agendamentos/calendario", autenticar, (req,res) => {
+  const rows=db.prepare(`
+    SELECT a.id,a.recurso,a.inicio,a.fim,a.status,
+      CASE WHEN a.usuario_id=? THEN 'Você' WHEN u.papel='admin' THEN 'Administração' ELSE 'Reservado por Aluno' END AS exibicao,
+      CASE WHEN u.papel='admin' THEN 1 ELSE 0 END AS criado_admin
+    FROM agendamentos a JOIN usuarios u ON u.id=a.usuario_id
+    WHERE a.status IN ('pendente','aprovado') AND a.recurso='Quadra'
+    ORDER BY a.inicio
+  `).all(req.usuario.id);
+  res.json(rows);
+});
 r.post("/agendamentos", autenticar, (req, res) => {
-  const recurso = clean(req.body.recurso, 120),
-    inicio = clean(req.body.inicio, 40),
-    fim = clean(req.body.fim, 40);
-  if (
-    !allowed(recurso, ["Quadra", "Jogos de Tabuleiro"]) ||
-    !Number.isFinite(Date.parse(inicio)) ||
-    !Number.isFinite(Date.parse(fim)) ||
-    Date.parse(inicio) >= Date.parse(fim) ||
-    Date.parse(inicio) < Date.now()
-  )
-    return bad(res, "Recurso ou período inválido.");
-
-  const ocupado = db
-    .prepare(
-      "SELECT id FROM agendamentos WHERE recurso=? AND status IN ('pendente','aprovado') AND inicio<? AND fim>?",
-    )
-    .get(recurso, fim, inicio);
-  if (ocupado) return res.status(409).json({ erro: "Horário já reservado." });
-
-  const info = db
-    .prepare(
-      "INSERT INTO agendamentos(usuario_id,recurso,inicio,fim) VALUES(?,?,?,?)",
-    )
-    .run(req.usuario.id, recurso, inicio, fim);
-  notificarAdmins("Nova solicitação de agendamento", `Solicitação #${info.lastInsertRowid} para ${recurso} enviada pelo usuário #${req.usuario.id}.`);
-  res.status(201).json(get("agendamentos", info.lastInsertRowid));
+  const recurso=clean(req.body.recurso,120), inicio=clean(req.body.inicio,40), fim=clean(req.body.fim,40);
+  if(!allowed(recurso,["Quadra","Jogos de Tabuleiro"]) || !Number.isFinite(Date.parse(inicio)) || !Number.isFinite(Date.parse(fim)) || Date.parse(inicio)>=Date.parse(fim) || Date.parse(inicio)<Date.now()) return bad(res,"Recurso ou período inválido.");
+  const adminUser=req.usuario.papel==="admin";
+  const ocupado=db.prepare("SELECT id FROM agendamentos WHERE recurso=? AND status IN ('pendente','aprovado') AND inicio<? AND fim>?").get(recurso,fim,inicio);
+  if(ocupado) return res.status(409).json({erro:"Horário já reservado."});
+  const jogos=Array.isArray(req.body.jogos)?req.body.jogos:[];
+  if(recurso==="Jogos de Tabuleiro" && !jogos.length) return bad(res,"Selecione pelo menos um jogo disponível.");
+  if(recurso==="Quadra" && jogos.length) return bad(res,"Não envie jogos para uma reserva de quadra.");
+  const criar=db.transaction(()=>{
+    for(const item of jogos){
+      const jogoId=positiveId(item.jogo_id), quantidade=Number(item.quantidade);
+      if(!Number.isInteger(quantidade)||quantidade<1) throw new Error("Quantidade de jogos inválida.");
+      const jogo=db.prepare("SELECT * FROM estoque_jogos WHERE id=? AND ativo=1").get(jogoId);
+      if(!jogo || jogo.quantidade_disponivel<quantidade) throw new Error("Estoque insuficiente para "+(jogo?.nome||"um dos jogos")+".");
+    }
+    const status=adminUser?"aprovado":"pendente";
+    const info=db.prepare("INSERT INTO agendamentos(usuario_id,recurso,inicio,fim,status) VALUES(?,?,?,?,?)").run(req.usuario.id,recurso,inicio,fim,status);
+    for(const item of jogos){
+      const jogoId=positiveId(item.jogo_id), quantidade=Number(item.quantidade);
+      db.prepare("UPDATE estoque_jogos SET quantidade_disponivel=quantidade_disponivel-? WHERE id=?").run(quantidade,jogoId);
+      db.prepare("INSERT INTO agendamento_jogos(agendamento_id,jogo_id,quantidade) VALUES(?,?,?)").run(info.lastInsertRowid,jogoId,quantidade);
+    }
+    return info.lastInsertRowid;
+  });
+  let id;
+  try{id=criar();}catch(error){return res.status(409).json({erro:error.message});}
+  if(!adminUser) notificarAdmins("Nova solicitação de agendamento",`Solicitação #${id} para ${recurso} aguardando autorização.`);
+  res.status(201).json(get("agendamentos",id));
+});
+r.patch("/agendamentos/:id/status", autenticar, admin, (req,res) => {
+  const id=positiveId(req.params.id), novo=req.body.status;
+  if(!allowed(novo,["aprovado","rejeitado","cancelado"])) return bad(res,"Status inválido.");
+  const ag=get("agendamentos",id); if(!ag) return res.sendStatus(404);
+  if(ag.status!=="pendente") return res.status(409).json({erro:"Esta solicitação já foi analisada."});
+  const atualizar=db.transaction(()=>{
+    db.prepare("UPDATE agendamentos SET status=? WHERE id=?").run(novo,id);
+    if(novo==="rejeitado" || novo==="cancelado"){
+      const itens=db.prepare("SELECT jogo_id,quantidade FROM agendamento_jogos WHERE agendamento_id=?").all(id);
+      for(const item of itens) db.prepare("UPDATE estoque_jogos SET quantidade_disponivel=MIN(quantidade_total,quantidade_disponivel+?) WHERE id=?").run(item.quantidade,item.jogo_id);
+    }
+  });
+  atualizar();
+  db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)").run(ag.usuario_id,"Atualização do agendamento",`Sua solicitação #${id} foi ${novo}.`);
+  res.json(get("agendamentos",id));
 });
 // Ajuda / chamados
 r.post("/chamados", autenticar, (req, res) => {
