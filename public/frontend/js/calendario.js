@@ -90,6 +90,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const status=reserva.status==="aprovado"?"Autorizado":reserva.status==="pendente"?"Aguardando autorização":reserva.status;
     info.replaceChildren();
     const linhas=[
+      ["Recurso","Quadra"],
       ["Data",data.toLocaleDateString("pt-BR")],
       ["Horário",data.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+" – "+fim.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})],
       ["Informação",reserva.exibicao],
@@ -151,7 +152,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       events.append(event);
     });
     element.append(events);
-    if(avisosVisiveis.length){element.classList.add("has-events");element.tabIndex=0;element.setAttribute("role","button");element.setAttribute("aria-label",avisosVisiveis.length+" aviso(s) em "+formatarData(dateString));element.addEventListener("click",()=>abrirAviso(avisosVisiveis[0]));element.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();abrirAviso(avisosVisiveis[0]);}});}
+    const temReserva=reservasQuadra.some(r=>String(r.inicio||"").slice(0,10)===dateString);
+    if(avisosVisiveis.length||temReserva){element.classList.add("has-events");element.tabIndex=0;element.setAttribute("role","button");element.setAttribute("aria-label",(avisosVisiveis.length+" aviso(s), "+(temReserva?"reserva de quadra":"sem reserva de quadra")+" em "+formatarData(dateString)));if(avisosVisiveis.length){element.addEventListener("click",()=>abrirAviso(avisosVisiveis[0]));element.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();abrirAviso(avisosVisiveis[0]);}});}}
     return element;
   }
   function renderCalendar(){
