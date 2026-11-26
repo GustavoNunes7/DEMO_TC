@@ -190,5 +190,6 @@ if (!colunasUsuariosJogos.includes("emprestimos_bloqueado_ate")) db.exec("ALTER 
 
 const colunasPedidos = db.prepare("PRAGMA table_info(pedidos)").all().map((c) => c.name);
 if (!colunasPedidos.includes("chave_idempotencia")) db.exec("ALTER TABLE pedidos ADD COLUMN chave_idempotencia TEXT");
+if (!colunasPedidos.includes("token_validado_em")) db.exec("ALTER TABLE pedidos ADD COLUMN token_validado_em TEXT");
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_pedidos_idempotencia_usuario ON pedidos(usuario_id,chave_idempotencia) WHERE chave_idempotencia IS NOT NULL");
 module.exports = { db, ready: Promise.resolve() };
