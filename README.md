@@ -17,7 +17,18 @@ Versão demonstrativa do sistema de gestão de associações educacionais.
 4. Na primeira execução, uma senha aleatória para `admin@techcampus.com` é gerada, salva no `.env` e exibida uma única vez no terminal. Guarde-a.
 5. Acesse **http://localhost:3022/**.
 
-## Primeira execução no Linux/macOS
+## Primeira execução no Linux Mint / macOS
+
+Execute o inicializador incluído no repositório:
+
+```bash
+chmod +x INICIAR-Linux.sh
+./INICIAR-Linux.sh
+```
+
+O script cria o `.env` a partir de `.env.example` quando necessário, instala as dependências, prepara o banco e a conta administrativa e inicia o servidor. Na primeira preparação, a senha administrativa gerada é exibida uma única vez no terminal. Guarde-a. O endereço padrão é **http://localhost:3022/**.
+
+Se preferir iniciar manualmente:
 
 ```bash
 cp .env.example .env
@@ -26,7 +37,16 @@ npm run setup
 npm start
 ```
 
-Na primeira preparação, o terminal exibe a senha administrativa gerada uma única vez. Guarde-a. O endereço padrão é **http://localhost:3022/**.
+### Acesso pelo APP-TC-IoT em um celular físico
+
+1. Deixe o notebook e o celular na mesma rede Wi-Fi.
+2. Inicie a DEMO_TC com `./INICIAR-Linux.sh`.
+3. Descubra o IPv4 do notebook com `hostname -I`.
+4. No arquivo `.env` da raiz do APP-TC-IoT, configure `EXPO_PUBLIC_API_URL=http://IP_DO_NOTEBOOK:3022`, substituindo pelo IP real.
+5. Teste no navegador do celular `http://IP_DO_NOTEBOOK:3022/api/saude`.
+6. Reinicie o Expo com `npx expo start -c`.
+
+No emulador Android, use `http://10.0.2.2:3022`. Não use `localhost` no celular físico.
 
 ## Conta administrativa
 
