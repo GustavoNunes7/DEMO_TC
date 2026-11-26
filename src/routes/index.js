@@ -999,10 +999,9 @@ r.post(["/iot/validar", "/iot/validate"], iotLimit, (req, res) => {
   if (registro.pedido_status === "cancelado" || registro.pedido_status === "rejeitado") return res.status(409).json({ valido: false, erro: "Pedido cancelado ou rejeitado." });
   if (registro.expira_em && registro.expira_em < Date.now()) return res.status(410).json({ valido: false, erro: "Token expirado. Solicite ajuda à AAPM." });
   // Registra a validação sem concluir a retirada nem consumir o token.
-  const validacao = db.prepare(
-    "UPDATE pedidos SET token_validado_em=COALESCE(token_validado_em,CURRENT_TIMESTAMP) WHERE id=?"
-  ).run(registro.pedido_id);
-  if (validacao.changes) {
+  const validacaoAnterior = db.prepare("SELECT token_validado_em FROM pedidos WHERE id=?").get(registro.pedido_id);
+  if (!validacaoAnterior?.token_validado_em) {
+    db.prepare("UPDATE pedidos SET token_validado_em=CURRENT_TIMESTAMP WHERE id=?").run(registro.pedido_id);
     const pedido = get("pedidos", registro.pedido_id);
     db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)")
       .run(pedido.usuario_id, "Token validado", `O token do pedido #${pedido.id} foi validado pelo aplicativo. A retirada ainda não foi concluída.`);
