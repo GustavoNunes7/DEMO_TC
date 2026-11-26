@@ -998,7 +998,24 @@ r.post(["/iot/validar", "/iot/validate"], iotLimit, (req, res) => {
   if (registro.usado || registro.pedido_status === "entregue") return res.status(409).json({ valido: false, erro: "Token já utilizado." });
   if (registro.pedido_status === "cancelado" || registro.pedido_status === "rejeitado") return res.status(409).json({ valido: false, erro: "Pedido cancelado ou rejeitado." });
   if (registro.expira_em && registro.expira_em < Date.now()) return res.status(410).json({ valido: false, erro: "Token expirado. Solicite ajuda à AAPM." });
-  res.json({ valido: true, pedidoId: registro.pedido_id, produtos: registro.produtos, expiraEm: registro.expira_em });
+  // Registra a validação sem concluir a retirada nem consumir o token.
+  const validacao = db.prepare(
+    "UPDATE pedidos SET token_validado_em=COALESCE(token_validado_em,CURRENT_TIMESTAMP) WHERE id=?"
+  ).run(registro.pedido_id);
+  if (validacao.changes) {
+    const pedido = get("pedidos", registro.pedido_id);
+    db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)")
+      .run(pedido.usuario_id, "Token validado", `O token do pedido #${pedido.id} foi validado pelo aplicativo. A retirada ainda não foi concluída.`);
+    notificarAdmins("Token validado no aplicativo", `O token do pedido #${pedido.id} foi validado. A retirada ainda não foi concluída.`);
+  }
+  const atualizado = get("pedidos", registro.pedido_id);
+  res.json({
+    valido: true,
+    pedidoId: registro.pedido_id,
+    produtos: registro.produtos,
+    expiraEm: registro.expira_em,
+    validadoEm: atualizado.token_validado_em
+  });
 });
 r.post(["/iot/confirmar", "/iot/confirm"], iotLimit, (req, res) => {
   const token = clean(req.body.token, 20);
