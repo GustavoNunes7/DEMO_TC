@@ -25,7 +25,9 @@
         const card = texto("article", "card h-100 border-secondary", "");
         const corpo = texto("div", "card-body", "");
         const titulo = texto("h5", "card-title", `Pedido #${pedido.id}`);
-        const status = texto("p", "small text-secondary", `Status: ${pedido.status} · ${dataBR(pedido.criado_em)}`);
+        const statusPedido = pedido.status === "pendente" && pedido.token_validado_em ? "Token validado" : pedido.status;
+        const status = texto("p", "small text-secondary", `Status: ${statusPedido} · ${dataBR(pedido.criado_em)}`);
+        if (pedido.token_validado_em) status.append(texto("span", "d-block text-success mt-1", `Validado pelo APP em ${dataBR(pedido.token_validado_em)}`));
         corpo.append(titulo, status);
         if (Array.isArray(pedido.itens)) {
           const itens = texto("p", "small", pedido.itens.map(i => `${i.nome} × ${i.quantidade}`).join(" · "));
