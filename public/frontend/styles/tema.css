@@ -2576,3 +2576,27 @@ html[data-bs-theme="light"] .settings-option .form-check-input:checked {
   background-color: #b82424;
   border-color: #b82424;
 }
+
+/* Reservas da Quadra: pendentes em alerta amarelo no calendário */
+#calendarDays .calendar-event.tc-reserva-quadra {
+  background: rgba(220, 53, 69, .16);
+  border: 1px solid rgba(220, 53, 69, .7);
+  color: #ff8b96;
+}
+#calendarDays .calendar-event.tc-reserva-pendente {
+  background: rgba(255, 193, 7, .18);
+  border: 1px solid #ffc107;
+  color: #ffd45c;
+  box-shadow: 0 0 0 1px rgba(255, 193, 7, .12);
+}
+#calendarDays .calendar-event.tc-reserva-pendente:hover,
+#calendarDays .calendar-event.tc-reserva-pendente:focus-visible {
+  background: rgba(255, 193, 7, .28);
+  border-color: #ffca2c;
+  color: #ffe08a;
+}
+html[data-bs-theme="light"] #calendarDays .calendar-event.tc-reserva-pendente {
+  background: #fff3cd;
+  border-color: #e0a800;
+  color: #664d03;
+}
