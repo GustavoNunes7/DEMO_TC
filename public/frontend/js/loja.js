@@ -1504,15 +1504,18 @@
           <li class="nav-item"><button type="button" class="nav-link" id="tabGTok">Tokens IoT</button></li>
           <li class="nav-item"><button type="button" class="nav-link" id="tabGAvisos">Avisos</button></li>
           <li class="nav-item"><button type="button" class="nav-link" id="tabGFin">Financeiro + Estoque</button></li>
-          <li class="nav-item"><button type="button" class="nav-link" id="tabGJogos">Estoque de Jogos</button></li>
         </ul>
         <div id="gProdutos">
+          <div class="nav nav-pills gap-2 mb-3"><button type="button" class="btn btn-sm btn-danger" id="gSubTabProdutos">Produtos</button><button type="button" class="btn btn-sm btn-outline-light" id="gSubTabJogos">Jogos</button></div>
+          <section id="gProdutosLista">
           <div class="d-flex flex-wrap gap-2 mb-3">
             <input id="gBusca" class="form-control bg-dark text-white border-secondary" style="max-width:320px" placeholder="Buscar produto ou categoria">
             <button type="button" class="btn btn-outline-light" id="gAtualizarProdutos"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar produtos</button>
             <button type="button" class="btn btn-danger ms-auto" id="gNovo"><i class="bi bi-plus-lg me-1"></i>Novo produto</button>
           </div>
           <div id="gProdTabela"></div>
+          </section>
+          <section id="gJogosCatalogo" hidden><input id="gJogosBusca" type="search" class="form-control bg-dark text-white border-secondary mb-3" style="max-width:320px" placeholder="Pesquisar jogos"><div id="gJogosCatalogoTabela"></div></section>
         </div>
         <div id="gTokens" hidden>
           <div class="d-flex flex-wrap gap-2 mb-3">
@@ -1556,9 +1559,10 @@
           <div id="gAvisoLista"></div>
         </div>
 
-        <div id="gJogosEstoque" hidden>
+        <div id="gFinanceiro" class="tc-finance" hidden>
+        <div id="gJogosGestao">
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-            <div><h4 class="mb-1">Estoque dos Jogos de Tabuleiro</h4><p class="text-secondary small mb-0">Controle de unidades para empréstimo. Compras adicionam unidades; danos e perdas registram baixa.</p></div>
+            <div><h4 class="mb-1">Compras e baixas — Jogos</h4><p class="text-secondary small mb-0">Registre compras, reposições e baixas por dano ou perda.</p></div>
             <button type="button" class="btn btn-outline-light" id="gJogosAtualizar">Atualizar estoque</button>
           </div>
           <form id="gJogosCompraForm" class="border border-secondary rounded-3 p-3 mb-3">
@@ -1582,7 +1586,6 @@
           </form>
           <div id="gJogosTabela"></div>
         </div>
-        <div id="gFinanceiro" class="tc-finance" hidden>
           <style>
             /* TechCampus Financeiro — tema escuro como padrão */
             #gFinanceiro{
@@ -1797,10 +1800,12 @@
     $("tabGTok").onclick = () => aba("tokens");
     $("tabGAvisos").onclick = () => aba("avisos");
     $("tabGFin").onclick = () => aba("financeiro");
-    $("tabGJogos").onclick = () => aba("jogos");
     $("gJogosCompraForm").addEventListener("submit", registrarCompraJogos);
     $("gJogosBaixaForm").addEventListener("submit", registrarBaixaJogos);
     $("gJogosAtualizar").onclick = carregarEstoqueJogos;
+    $("gSubTabProdutos").onclick = () => alternarCatalogo("produtos");
+    $("gSubTabJogos").onclick = () => alternarCatalogo("jogos");
+    $("gJogosBusca").addEventListener("input", carregarCatalogoJogos);
     $("gFinMes").value = new Date().toISOString().slice(0,7);
     $("gEstoqueData").value = new Date().toISOString().slice(0,10);
     $("gFinData").value = new Date().toISOString().slice(0,10);
@@ -1887,21 +1892,31 @@
     $("tabGTok").classList.toggle("active", qual === "tokens");
     $("tabGAvisos").classList.toggle("active", qual === "avisos");
     $("tabGFin").classList.toggle("active", qual === "financeiro");
-    $("tabGJogos").classList.toggle("active", qual === "jogos");
     $("gProdutos").hidden = qual !== "prod";
     $("gPedidos").hidden = qual !== "ped";
     $("gTokens").hidden = qual !== "tokens";
     $("gAvisos").hidden = qual !== "avisos";
     $("gFinanceiro").hidden = qual !== "financeiro";
-    $("gJogosEstoque").hidden = qual !== "jogos";
     if (qual === "financeiro") carregarFinanceiroAdmin();
-    if (qual === "jogos") carregarEstoqueJogos();
     if (qual === "ped") carregarPedidosAdmin();
     if (qual === "tokens") carregarTokensAdmin();
     if (qual === "avisos") carregarAvisosAdmin();
   }
 
 
+  function alternarCatalogo(tipo) {
+    const jogos=tipo==="jogos";$("gProdutosLista").hidden=jogos;$("gJogosCatalogo").hidden=!jogos;
+    $("gSubTabProdutos").classList.toggle("btn-danger",!jogos);$("gSubTabProdutos").classList.toggle("btn-outline-light",jogos);
+    $("gSubTabJogos").classList.toggle("btn-danger",jogos);$("gSubTabJogos").classList.toggle("btn-outline-light",!jogos);
+    if(jogos)carregarCatalogoJogos();
+  }
+  async function carregarCatalogoJogos(){
+    const alvo=$("gJogosCatalogoTabela");if(!alvo)return;
+    try{const jogos=await api("/agendamentos/estoque"),q=norm($("gJogosBusca").value||"");
+      const rows=jogos.filter(j=>!q||norm(j.nome+" "+j.descricao).includes(q)).map(j=>h("tr",{},h("td",{},j.nome),h("td",{},j.descricao||"—"),h("td",{},String(j.quantidade_total??"—")),h("td",{},String(j.quantidade_disponivel??0)),h("td",{},valorReal(j.valor_reposicao_centavos))));
+      alvo.replaceChildren(tabela(["Jogo","Descrição","Total","Disponíveis","Reposição"],h("tbody",{},rows)));
+    }catch(e){alvo.textContent=e.message;}
+  }
   async function carregarEstoqueJogos() {
     const alvo=$("gJogosTabela"); if(!alvo)return;
     alvo.replaceChildren(h("p",{class:"text-secondary"},"Carregando estoque..."));
