@@ -1356,6 +1356,20 @@ db.prepare("UPDATE estoque_jogos SET quantidade_total=3,quantidade_disponivel=3 
 db.prepare("UPDATE estoque_jogos SET quantidade_total=1,quantidade_disponivel=1 WHERE nome='Jogo da Vida' AND quantidade_total=quantidade_disponivel").run();
 // Os novos itens do catálogo recebem quantidade demonstrativa inicial; o administrador deve ajustar ao inventário físico real.
 
+ // Reforço do estoque demonstrativo: aumenta até as metas sem reduzir unidades
+ // emprestadas e sem somar novamente quando o servidor reiniciar.
+ const metasEstoqueJogos = [
+   ["Xadrez",10],["Damas",6],["Dominó",8],["Cartas de UNO",10],["Baralho",8],
+   ["Ludo",6],["Jogo Imobiliário",5],["Banco Imobiliário",5],["Jogo da Vida",5],
+   ["Twister",4],["Imagem & Ação",5],["Detetive",5],["Cara a Cara",5],
+   ["Pula Pirata",5],["Cai Não Cai",5]
+ ];
+ const completarEstoqueJogo = db.prepare(
+   "UPDATE estoque_jogos SET quantidade_disponivel=quantidade_disponivel+MAX(0,?-quantidade_total), quantidade_total=MAX(quantidade_total,?) WHERE nome=? AND ativo=1"
+ );
+ metasEstoqueJogos.forEach(([nome,meta])=>completarEstoqueJogo.run(meta,meta,nome));
+
+
 r.get("/agendamentos/estoque/relatorio/mais-emprestados", autenticar, admin, (_req,res) => {
   const rows=db.prepare(`
     SELECT e.id,e.nome,COALESCE(SUM(aj.quantidade),0) AS unidades_emprestadas,
