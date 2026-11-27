@@ -2820,12 +2820,16 @@
       <form id="formAgendamento">
         <div class="modal-body">
           <input type="hidden" id="agendamentoTipo">
+          <div id="tcQuadraCampos">
+            <div class="mb-3"><label for="agendamentoNome" class="form-label">Nome da atividade</label><input type="text" id="agendamentoNome" class="form-control bg-dark text-white border-secondary" maxlength="120" placeholder="Ex.: Treino de vôlei"></div>
+            <div class="mb-3"><label for="agendamentoDescricao" class="form-label">Descrição</label><textarea id="agendamentoDescricao" class="form-control bg-dark text-white border-secondary" rows="2" maxlength="1000" placeholder="Descreva brevemente a atividade"></textarea></div>
+          </div>
           <div class="mb-3">
             <label for="agendamentoData" class="form-label">Data</label>
             <input type="date" id="agendamentoData" class="form-control bg-dark text-white border-secondary" required>
           </div>
           <div class="mb-0">
-            <label for="agendamentoHorario" class="form-label">Horário (1 hora de duração)</label>
+            <label for="agendamentoHorario" class="form-label">Horário de início</label>
             <select id="agendamentoHorario" class="form-select bg-dark text-white border-secondary" required>
               <option value="" selected disabled>Selecione</option>
               <option value="07:30">07:30</option>
@@ -2836,6 +2840,7 @@
               <option value="18:30">18:30</option>
             </select>
           </div>
+          <div class="mb-0" id="tcDuracaoGrupo"><label for="agendamentoDuracao" class="form-label">Tempo de uso (máximo 3 horas)</label><select id="agendamentoDuracao" class="form-select bg-dark text-white border-secondary"><option value="1">1 hora</option><option value="2">2 horas</option><option value="3">3 horas</option></select></div>
           <p id="agendamentoMsg" class="small mt-3 mb-0"></p>
         </div>
         <div class="modal-footer border-secondary">
