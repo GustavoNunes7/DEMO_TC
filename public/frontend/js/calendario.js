@@ -90,38 +90,47 @@ document.addEventListener("DOMContentLoaded", async () => {
     const status=reserva.status==="aprovado"?"Autorizado":reserva.status==="pendente"?"Aguardando autorização":reserva.status;
     info.replaceChildren();
     const linhas=reserva.tipo==="publicacao"?[["Título",reserva.titulo],["Descrição",reserva.descricao],["Publicado por",reserva.autor_nome],["Status","Aprovado pela Administração"]]:[
-      ["Recurso","Quadra"],["Data",data.toLocaleDateString("pt-BR")],
+      ["Recurso","Quadra"],["Aluno",reserva.solicitante||"—"],["E-mail",reserva.email_solicitante||"—"],
+      ["Data",data.toLocaleDateString("pt-BR")],
       ["Horário",data.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+" – "+fim.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})],
-      ["Informação",reserva.exibicao],["Status",status]
+      ["Status",status],...(reserva.motivo_cancelamento?[["Motivo do cancelamento",reserva.motivo_cancelamento]]:[])
     ];
     linhas.forEach(([label,value])=>{const p=document.createElement("p");p.className="mb-2";const b=document.createElement("strong");b.textContent=label+": ";p.append(b,document.createTextNode(value||"—"));info.append(p);});
     const actions=modal.querySelector("#tcReservaCalendarioAcoes");
     const msg=modal.querySelector("#tcReservaCalendarioMsg");
     if(msg) msg.textContent="";
-    const pending=isAdminSessao && reserva.tipo==="publicacao" && reserva.status==="pendente";
-    if(actions) actions.hidden=!pending;
-    if(pending){
-      const divulgar=modal.querySelector("#tcReservaDivulgar");
-      const cancelar=modal.querySelector("#tcReservaCancelar");
-      const atualizarStatus=async status=>{
-        divulgar.disabled=true; cancelar.disabled=true;
-        try{
-          const response=await fetch("/api/agendamentos/quadra-publicacoes/"+encodeURIComponent(reserva.id)+"/status",{
-            method:"PATCH",
-            headers:{"Content-Type":"application/json",Authorization:"Bearer "+(sessionStorage.getItem("techcampus_token")||"")},
-            body:JSON.stringify({status})
-          });
-          const body=await response.json().catch(()=>({}));
-          if(!response.ok) throw new Error(body.erro||"Não foi possível atualizar a publicação.");
-          window.bootstrap?.Modal.getOrCreateInstance(modal).hide();
-          await carregarAvisosCalendario();
-        }catch(error){
-          if(msg) msg.textContent=error.message||"Erro ao atualizar publicação.";
-          divulgar.disabled=false; cancelar.disabled=false;
-        }
+    const pending=isAdminSessao && reserva.tipo!=="publicacao" && reserva.status==="pendente";
+    const approved=isAdminSessao && reserva.tipo!=="publicacao" && reserva.status==="aprovado";
+    if(actions){
+      actions.hidden=!(pending||approved);
+      actions.replaceChildren();
+      const addAction=(label,cls,handler)=>{
+        const button=document.createElement("button");button.type="button";button.className="btn "+cls;button.textContent=label;button.addEventListener("click",handler);actions.append(button);
       };
-      divulgar.onclick=()=>atualizarStatus("aprovado");
-      cancelar.onclick=()=>{if(window.confirm("Cancelar esta publicação da Quadra? O aluno será notificado.")) atualizarStatus("rejeitado");};
+      const run=async(fn)=>{
+        [...actions.querySelectorAll("button")].forEach(b=>b.disabled=true);
+        try{await fn();window.bootstrap?.Modal.getOrCreateInstance(modal).hide();await carregarAvisosCalendario();}
+        catch(error){if(msg)msg.textContent=error.message||"Não foi possível concluir.";[...actions.querySelectorAll("button")].forEach(b=>b.disabled=false);}
+      };
+      if(pending){
+        addAction("Autorizar","btn-success",()=>run(()=>fetch("/api/agendamentos/"+reserva.id+"/status",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:"Bearer "+(sessionStorage.getItem("techcampus_token")||"")},body:JSON.stringify({status:"aprovado"})}).then(async r=>{const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||"Falha ao autorizar.");})));
+        addAction("Recusar","btn-outline-danger",()=>{if(confirm("Recusar esta solicitação de reserva?"))run(()=>fetch("/api/agendamentos/"+reserva.id+"/status",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:"Bearer "+(sessionStorage.getItem("techcampus_token")||"")},body:JSON.stringify({status:"rejeitado"})}).then(async r=>{const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||"Falha ao recusar.");}));});
+      }
+      if(approved){
+        addAction("Editar horário","btn-outline-info",()=>{
+          const dataAtual=String(reserva.inicio).slice(0,10),horaAtual=String(reserva.inicio).slice(11,16);
+          const novaData=prompt("Nova data (AAAA-MM-DD):",dataAtual);if(!novaData)return;
+          const novaHora=prompt("Novo horário de início (HH:MM):",horaAtual);if(!novaHora)return;
+          const novoInicio=novaData+"T"+novaHora+":00";const novoFim=new Date(novoInicio);novoFim.setHours(novoFim.getHours()+1);
+          const pad=n=>String(n).padStart(2,"0");const fimStr=novoFim.getFullYear()+"-"+pad(novoFim.getMonth()+1)+"-"+pad(novoFim.getDate())+"T"+pad(novoFim.getHours())+":"+pad(novoFim.getMinutes())+":00";
+          run(()=>fetch("/api/agendamentos/"+reserva.id,{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:"Bearer "+(sessionStorage.getItem("techcampus_token")||"")},body:JSON.stringify({inicio:novoInicio,fim:fimStr})}).then(async r=>{const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||"Falha ao editar.");}));
+        });
+        addAction("Cancelar reserva","btn-outline-danger",()=>{
+          const motivo=prompt("Informe o motivo do cancelamento (obrigatório):");if(motivo===null)return;
+          if(motivo.trim().length<5){if(msg)msg.textContent="Informe pelo menos 5 caracteres.";return;}
+          run(()=>fetch("/api/agendamentos/"+reserva.id+"/status",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:"Bearer "+(sessionStorage.getItem("techcampus_token")||"")},body:JSON.stringify({status:"cancelado",motivo:motivo.trim()})}).then(async r=>{const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.erro||"Falha ao cancelar.");}));
+        });
+      }
     }
     window.bootstrap?.Modal.getOrCreateInstance(modal).show();
   }
