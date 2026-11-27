@@ -22,8 +22,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   let usuarioSessao = {};
   try { usuarioSessao = JSON.parse(sessionStorage.getItem("techcampus_usuario") || "{}"); } catch {}
-  const papelSessao = String(usuarioSessao.papel || usuarioSessao.role || "").toLowerCase();
-  const isAdminSessao = ["admin", "administrador"].includes(papelSessao);
+  const papelSessao = String(usuarioSessao.papel || usuarioSessao.role || usuarioSessao.funcao || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[_\s]+/g,"-");
+  const isAdminSessao = ["admin","administrador","lider","sub-lider","sublider","vice-lider"].includes(papelSessao) || usuarioSessao.admin===true || usuarioSessao.isAdmin===true;
   const adminTools = document.getElementById("avisosAdminFerramentas");
   const addButton = document.getElementById("avisosAdminAdicionar");
   if (isAdminSessao) {
@@ -99,8 +99,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     const actions=modal.querySelector("#tcReservaCalendarioAcoes");
     const msg=modal.querySelector("#tcReservaCalendarioMsg");
     if(msg) msg.textContent="";
-    const pending=isAdminSessao && reserva.tipo!=="publicacao" && reserva.status==="pendente";
-    const approved=isAdminSessao && reserva.tipo!=="publicacao" && reserva.status==="aprovado";
+    const papelAtual=String((()=>{try{return JSON.parse(sessionStorage.getItem("techcampus_usuario")||"{}").papel||""}catch{return ""}})()).toLowerCase();
+    const adminAtivo=isAdminSessao || ["admin","administrador","lider","sub-lider","sublider","vice-lider"].includes(papelAtual);
+    const pending=adminAtivo && reserva.tipo!=="publicacao" && reserva.status==="pendente";
+    const approved=adminAtivo && reserva.tipo!=="publicacao" && reserva.status==="aprovado";
     if(actions){
       actions.hidden=!(pending||approved);
       actions.replaceChildren();
@@ -187,10 +189,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       const pendente=reserva.tipo!=="publicacao" && reserva.status==="pendente";
       event.className="calendar-event tc-reserva-quadra"+(pendente?" tc-reserva-pendente":"");
       const pessoa=reserva.solicitante||"Aluno não identificado";
-      event.title=reserva.tipo==="publicacao"?"Jogo na Quadra: "+(reserva.titulo||""):("Quadra · "+pessoa+" · "+(pendente?"Aguardando autorização":"Autorizada"));
+      event.title=reserva.tipo==="publicacao"?"Jogo na Quadra: "+(reserva.titulo||""):((reserva.titulo||"Reserva da Quadra")+" · "+pessoa+" · "+(pendente?"Aguardando autorização":"Autorizada"));
       const label=document.createElement("span");
       label.className="calendar-event-title";
-      label.textContent=reserva.tipo==="publicacao"?"Jogo: "+(reserva.titulo||"Publicação"):(pendente?"Quadra · Pendente":"Quadra · "+pessoa);
+      label.textContent=reserva.tipo==="publicacao"?"Jogo: "+(reserva.titulo||"Publicação"):((isAdminSessao&&reserva.status==="pendente"?"Pendente · ":"")+ (reserva.titulo||"Reserva da Quadra"));
       event.append(label);
       event.addEventListener("click",e=>{e.stopPropagation();abrirDetalheReserva(reserva);});
       events.append(event);
