@@ -1349,6 +1349,11 @@ const catalogoJogosInicial = [
 const valoresIniciaisJogos={"Xadrez":[2,3500],"Damas":[2,2500],"Dominó":[3,1800],"Cartas de UNO":[3,2500],"Baralho":[4,1200],"Ludo":[2,3000],"Jogo Imobiliário":[2,4500],"Banco Imobiliário":[2,6500],"Jogo da Vida":[2,5500],"Twister":[1,7500],"Imagem & Ação":[2,5000],"Detetive":[2,4800],"Cara a Cara":[2,4200],"Pula Pirata":[2,3800],"Cai Não Cai":[2,4000]};
 const inserirJogoInicial=db.prepare("INSERT OR IGNORE INTO estoque_jogos(nome,descricao,quantidade_total,quantidade_disponivel,valor_reposicao_centavos) VALUES(?,?,?,?,?)");
 catalogoJogosInicial.forEach(([nome,descricao])=>{const [qtd,valor]=valoresIniciaisJogos[nome]||[1,0];inserirJogoInicial.run(nome,descricao,qtd,qtd,valor);db.prepare("UPDATE estoque_jogos SET quantidade_total=?,quantidade_disponivel=?,valor_reposicao_centavos=? WHERE nome=? AND quantidade_total=1 AND quantidade_disponivel=1 AND valor_reposicao_centavos=0").run(qtd,qtd,valor,nome);});
+// Quantidades iniciais solicitadas para o catálogo demonstrativo; só ajusta itens sem empréstimos ativos.
+db.prepare("UPDATE estoque_jogos SET quantidade_total=10,quantidade_disponivel=10 WHERE nome='Xadrez' AND quantidade_total=quantidade_disponivel").run();
+db.prepare("UPDATE estoque_jogos SET quantidade_total=5,quantidade_disponivel=5 WHERE nome='Cartas de UNO' AND quantidade_total=quantidade_disponivel").run();
+db.prepare("UPDATE estoque_jogos SET quantidade_total=3,quantidade_disponivel=3 WHERE nome='Dominó' AND quantidade_total=quantidade_disponivel").run();
+db.prepare("UPDATE estoque_jogos SET quantidade_total=1,quantidade_disponivel=1 WHERE nome='Jogo da Vida' AND quantidade_total=quantidade_disponivel").run();
 // Os novos itens do catálogo recebem quantidade demonstrativa inicial; o administrador deve ajustar ao inventário físico real.
 
 r.get("/agendamentos/estoque", autenticar, (req,res) => {
@@ -1370,6 +1375,16 @@ r.post("/agendamentos/estoque", autenticar, admin, (req,res) => {
   }
   const info=db.prepare("INSERT INTO estoque_jogos(nome,descricao,quantidade_total,quantidade_disponivel,valor_reposicao_centavos) VALUES(?,?,?,?,?)").run(nome,descricao,quantidade,quantidade,valor);
   res.status(201).json(get("estoque_jogos",info.lastInsertRowid));
+});
+r.patch("/agendamentos/estoque/:id", autenticar, admin, (req,res) => {
+  const id=positiveId(req.params.id), nome=clean(req.body.nome,100), descricao=clean(req.body.descricao,300), valor=Number(req.body.valor_reposicao_centavos||0);
+  const jogo=db.prepare("SELECT * FROM estoque_jogos WHERE id=? AND ativo=1").get(id);
+  if(!jogo)return res.status(404).json({erro:"Jogo não encontrado."});
+  if(!nome||!Number.isInteger(valor)||valor<0)return bad(res,"Informe nome e valor de reposição válidos.");
+  const duplicado=db.prepare("SELECT id FROM estoque_jogos WHERE nome=? AND id<>?").get(nome,id);
+  if(duplicado)return bad(res,"Já existe um jogo com esse nome.");
+  db.prepare("UPDATE estoque_jogos SET nome=?,descricao=?,valor_reposicao_centavos=? WHERE id=?").run(nome,descricao,valor,id);
+  res.json({ok:true,jogo:get("estoque_jogos",id)});
 });
 r.post("/agendamentos/estoque/:id/baixa", autenticar, admin, (req,res) => {
   const id=positiveId(req.params.id), quantidade=Number(req.body.quantidade), motivo=clean(req.body.motivo,30);
