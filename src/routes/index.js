@@ -1462,7 +1462,21 @@ r.get("/agendamentos", autenticar, (req,res) => {
 });
 r.get("/agendamentos/calendario", autenticar, (req,res) => {
  const adminUser=req.usuario.papel==="admin";
- const reservas=db.prepare(`SELECT a.id,a.usuario_id,a.recurso,a.inicio,a.fim,a.status,a.motivo_cancelamento,u.nome AS solicitante,u.email AS email_solicitante FROM agendamentos a JOIN usuarios u ON u.id=a.usuario_id WHERE a.recurso='Quadra' AND a.status IN (${adminUser?"'pendente','aprovado'":"'aprovado'"}) ORDER BY a.inicio`).all();
+ const reservas=db.prepare(`SELECT a.id,a.usuario_id,a.recurso,a.inicio,a.fim,a.status,a.motivo_cancelamento,u.nome AS solicitante,u.email AS email_solicitante
+ FROM agendamentos a JOIN usuarios u ON u.id=a.usuario_id
+ WHERE a.recurso='Quadra' AND a.status IN (${adminUser?"'pendente','aprovado'":"'aprovado'"})
+ AND NOT EXISTS (
+   SELECT 1 FROM agendamentos anterior
+   WHERE anterior.recurso='Quadra' AND anterior.usuario_id=a.usuario_id
+     AND anterior.inicio=a.inicio AND anterior.fim=a.fim
+     AND anterior.status IN ('pendente','aprovado')
+     AND (CASE WHEN anterior.status='pendente' THEN 0 ELSE 1 END)<(CASE WHEN a.status='pendente' THEN 0 ELSE 1 END)
+ )
+ AND a.id=(SELECT MIN(igual.id) FROM agendamentos igual
+   WHERE igual.recurso='Quadra' AND igual.usuario_id=a.usuario_id
+     AND igual.inicio=a.inicio AND igual.fim=a.fim
+     AND igual.status=a.status)
+ ORDER BY a.inicio`).all();
  const pubs=db.prepare("SELECT id,titulo,descricao,autor_nome,status,'publicacao' AS tipo,'Quadra' AS recurso,titulo AS exibicao,criado_em AS inicio,criado_em AS fim FROM quadra_publicacoes WHERE status='aprovado' AND autorizado_divulgacao=1 ORDER BY criado_em DESC").all().map(p=>({...p,inicio:String(p.inicio).slice(0,10)+'T12:00:00',fim:String(p.inicio).slice(0,10)+'T13:00:00'}));
  res.json([...reservas,...pubs]);
 });
