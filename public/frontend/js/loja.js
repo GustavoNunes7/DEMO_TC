@@ -1768,6 +1768,57 @@
     </div>`;
     document.body.append(m.firstElementChild);
     modalProdAdmin = new bootstrap.Modal($("modalProdAdmin"));
+    const jogoModalWrap=h("div");
+    jogoModalWrap.innerHTML=`
+      <div class="modal fade" id="modalJogoAdmin" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered"><div class="modal-content bg-dark text-white border-secondary">
+          <div class="modal-header border-secondary"><h5 class="modal-title">Editar jogo</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+          <div class="modal-body">
+            <label class="form-label small" for="gJogoEditarNome">Nome do jogo</label>
+            <input id="gJogoEditarNome" class="form-control bg-dark text-white border-secondary mb-3" maxlength="100" required>
+            <label class="form-label small" for="gJogoEditarCategoria">Categoria</label>
+            <input id="gJogoEditarCategoria" class="form-control bg-dark text-white border-secondary mb-3" readonly>
+            <label class="form-label small" for="gJogoEditarDescricao">Descrição</label>
+            <textarea id="gJogoEditarDescricao" rows="3" maxlength="300" class="form-control bg-dark text-white border-secondary mb-3"></textarea>
+            <div class="row g-2">
+              <div class="col"><label class="form-label small" for="gJogoEditarValor">Valor de reposição (R$)</label><input id="gJogoEditarValor" type="number" min="0" step="0.01" class="form-control bg-dark text-white border-secondary"></div>
+              <div class="col"><label class="form-label small" for="gJogoEditarEstoque">Estoque total</label><input id="gJogoEditarEstoque" class="form-control bg-dark text-white border-secondary" readonly></div>
+              <div class="col"><label class="form-label small" for="gJogoEditarDisponivel">Disponíveis</label><input id="gJogoEditarDisponivel" class="form-control bg-dark text-white border-secondary" readonly></div>
+            </div>
+            <div class="small text-secondary mt-2">Para aumentar o estoque, use Estoque + Financeiro. Os números acima são somente consulta.</div>
+            <div id="gJogoEditarMsg" role="alert" class="small mt-2"></div>
+          </div>
+          <div class="modal-footer border-secondary">
+            <button type="button" class="btn btn-outline-danger me-auto" id="gJogoExcluir">Excluir jogo</button>
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" class="btn btn-danger" id="gJogoSalvar">Salvar alterações</button>
+          </div>
+        </div></div>
+      </div>`;
+    document.body.append(jogoModalWrap.firstElementChild);
+    modalJogoAdmin=new bootstrap.Modal($("modalJogoAdmin"));
+    $("gJogoSalvar").addEventListener("click",async()=>{
+      if(!jogoEmEdicao)return;
+      const btn=$("gJogoSalvar");btn.disabled=true;$("gJogoEditarMsg").textContent="Salvando alterações...";
+      try{
+        const nome=$("gJogoEditarNome").value.trim(),descricao=$("gJogoEditarDescricao").value.trim();
+        const valor=Math.round(Number($("gJogoEditarValor").value)*100);
+        if(!nome||!Number.isSafeInteger(valor)||valor<0)throw Error("Confira o nome e o valor de reposição.");
+        await api("/agendamentos/estoque/"+jogoEmEdicao.id,{method:"PATCH",body:JSON.stringify({nome,descricao,valor_reposicao_centavos:valor})});
+        modalJogoAdmin.hide();await carregarCatalogoJogos();
+      }catch(e){$("gJogoEditarMsg").textContent=e.message||"Não foi possível salvar.";}
+      finally{btn.disabled=false;}
+    });
+    $("gJogoExcluir").addEventListener("click",async()=>{
+      if(!jogoEmEdicao)return;
+      const btn=$("gJogoExcluir");btn.disabled=true;$("gJogoEditarMsg").textContent="Excluindo jogo...";
+      try{
+        await api("/agendamentos/estoque/"+jogoEmEdicao.id,{method:"DELETE"});
+        modalJogoAdmin.hide();await Promise.all([carregarCatalogoJogos(),carregarEstoqueJogos(),carregarFinanceiroAdmin()]);
+      }catch(e){$("gJogoEditarMsg").textContent=e.message||"Não foi possível excluir o jogo.";}
+      finally{btn.disabled=false;}
+    });
 
     $("tabGProd").onclick = () => aba("prod");
     $("tabGPed").onclick = () => aba("ped");
@@ -1881,6 +1932,9 @@
     $("gSubTabJogos").classList.toggle("btn-danger",jogos);$("gSubTabJogos").classList.toggle("btn-outline-light",!jogos);
     if(jogos)carregarCatalogoJogos();
   }
+  let modalJogoAdmin = null;
+  let jogoEmEdicao = null;
+
   function categoriaJogo(nome){
     const n=norm(nome);
     if(/xadrez|damas|detetive|cara a cara/.test(n))return "Estratégia";
@@ -1889,14 +1943,17 @@
     if(/vida|imobiliário|ludo/.test(n))return "Tabuleiro";
     return "Jogos de tabuleiro";
   }
-  async function editarJogoEstoque(j){
-    const nome=window.prompt("Nome do jogo:",j.nome);if(nome===null)return;
-    const descricao=window.prompt("Categoria / descrição:",j.descricao||categoriaJogo(j.nome));if(descricao===null)return;
-    const valorTexto=window.prompt("Valor de reposição (R$):",(Number(j.valor_reposicao_centavos||0)/100).toFixed(2));if(valorTexto===null)return;
-    const valor=Math.round(Number(valorTexto.replace(",","."))*100);
-    if(!nome.trim()||!Number.isSafeInteger(valor)||valor<0){alert("Confira o nome e o valor.");return;}
-    try{await api("/agendamentos/estoque/"+j.id,{method:"PATCH",body:JSON.stringify({nome:nome.trim(),descricao:descricao.trim(),valor_reposicao_centavos:valor})});await carregarCatalogoJogos();}
-    catch(e){alert(e.message||"Não foi possível editar o jogo.");}
+  function editarJogoEstoque(j){
+    jogoEmEdicao=j;
+    $("gJogoEditarNome").value=j.nome||"";
+    $("gJogoEditarCategoria").value=categoriaJogo(j.nome);
+    $("gJogoEditarDescricao").value=j.descricao||"";
+    $("gJogoEditarValor").value=(Number(j.valor_reposicao_centavos||0)/100).toFixed(2);
+    $("gJogoEditarEstoque").value=String(j.quantidade_total??0);
+    $("gJogoEditarDisponivel").value=String(j.quantidade_disponivel??0);
+    $("gJogoEditarMsg").textContent="";
+    $("gJogoExcluir").hidden=false;
+    modalJogoAdmin.show();
   }
   async function carregarCatalogoJogos(){
     const alvo=$("gJogosCatalogoTabela");if(!alvo)return;
