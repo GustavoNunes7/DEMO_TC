@@ -1513,6 +1513,7 @@ function atualizarBloqueioEmprestimos(usuarioId){
 r.post("/agendamentos", autenticar, (req, res) => {
   const recurso=clean(req.body.recurso,120), inicio=clean(req.body.inicio,40), fim=clean(req.body.fim,40);
   if(!allowed(recurso,["Quadra","Jogos de Tabuleiro"]) || !Number.isFinite(Date.parse(inicio)) || !Number.isFinite(Date.parse(fim)) || Date.parse(inicio)>=Date.parse(fim) || Date.parse(inicio)<Date.now()) return bad(res,"Recurso ou período inválido.");
+  if(recurso==="Jogos de Tabuleiro" && Date.parse(fim)-Date.parse(inicio)>15*24*60*60*1000) return bad(res,"O prazo máximo de empréstimo é de 14 dias.");
   const adminUser=req.usuario.papel==="admin";
   if(recurso==="Jogos de Tabuleiro" && !adminUser){
     const bloqueio=atualizarBloqueioEmprestimos(req.usuario.id);
