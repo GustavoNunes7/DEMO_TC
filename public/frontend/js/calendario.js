@@ -89,12 +89,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     const fim=new Date(String(reserva.fim).replace(" ","T"));
     const status=reserva.status==="aprovado"?"Autorizado":reserva.status==="pendente"?"Aguardando autorização":reserva.status;
     info.replaceChildren();
-    const linhas=[
-      ["Recurso","Quadra"],
-      ["Data",data.toLocaleDateString("pt-BR")],
+    const linhas=reserva.tipo==="publicacao"?[["Título",reserva.titulo],["Descrição",reserva.descricao],["Publicado por",reserva.autor_nome],["Status","Aprovado pela Administração"]]:[
+      ["Recurso","Quadra"],["Data",data.toLocaleDateString("pt-BR")],
       ["Horário",data.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+" – "+fim.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})],
-      ["Informação",reserva.exibicao],
-      ["Status",status]
+      ["Informação",reserva.exibicao],["Status",status]
     ];
     linhas.forEach(([label,value])=>{const p=document.createElement("p");p.className="mb-2";const b=document.createElement("strong");b.textContent=label+": ";p.append(b,document.createTextNode(value||"—"));info.append(p);});
     window.bootstrap?.Modal.getOrCreateInstance(modal).show();
@@ -143,10 +141,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       const event=document.createElement("button");
       event.type="button";
       event.className="calendar-event importante tc-reserva-quadra";
-      event.title="Quadra: "+reserva.exibicao;
+      event.title=reserva.tipo==="publicacao"?"Jogo na Quadra: "+reserva.titulo:"Quadra: "+reserva.exibicao;
       const label=document.createElement("span");
       label.className="calendar-event-title";
-      label.textContent="Quadra · "+reserva.exibicao;
+      label.textContent=reserva.tipo==="publicacao"?"Jogo: "+reserva.titulo:"Quadra · "+reserva.exibicao;
       event.append(label);
       event.addEventListener("click",e=>{e.stopPropagation();abrirDetalheReserva(reserva);});
       events.append(event);
@@ -200,7 +198,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }))
         .filter(a => /^\d{4}-\d{2}-\d{2}$/.test(a.data))
         .forEach(a => {
-          const chave = [a.titulo,a.data,a.horario,a.local,a.descricao].map(v=>String(v||"").trim().toLocaleLowerCase("pt-BR")).join("|");
+          const chave = [a.titulo,a.data,a.local].map(v=>String(v||"").trim().toLocaleLowerCase("pt-BR")).join("|");
           if (!avisosUnicos.has(chave)) avisosUnicos.set(chave,a);
         });
       avisos = [...avisosUnicos.values()];
@@ -223,6 +221,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     aplicarFiltro(filtroAtual);
   }
   // Botão explícito de atualização para evitar depender de cache ou navegação.
+  const publicarQuadraBtn=document.createElement("button");
+  publicarQuadraBtn.type="button";publicarQuadraBtn.className="btn btn-danger btn-sm ms-2";
+  publicarQuadraBtn.textContent="Divulgar jogo na Quadra";
+  (todayButton?.parentElement||calendarMonth?.parentElement)?.append(publicarQuadraBtn);
+  publicarQuadraBtn.addEventListener("click",()=>{
+    let modal=document.getElementById("tcPublicarQuadraModal");
+    if(!modal){
+      modal=document.createElement("div");modal.className="modal fade";modal.id="tcPublicarQuadraModal";modal.tabIndex=-1;
+      modal.innerHTML='<div class="modal-dialog"><div class="modal-content bg-dark text-white"><div class="modal-header"><h5>Divulgar jogo na Quadra</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form id="tcPublicarQuadraForm"><div class="modal-body"><label class="form-label">Título</label><input id="tcPublicarQuadraTitulo" class="form-control mb-3" maxlength="120" required><label class="form-label">Descrição</label><textarea id="tcPublicarQuadraDescricao" class="form-control mb-3" rows="4" maxlength="1500" required></textarea><div class="form-check"><input id="tcPublicarQuadraConsentimento" class="form-check-input" type="checkbox" required><label class="form-check-label">Autorizo divulgar para todos os alunos após aprovação do administrador.</label></div><p id="tcPublicarQuadraMsg" class="small mt-2"></p></div><div class="modal-footer"><button class="btn btn-danger" type="submit">Enviar para aprovação</button></div></form></div></div>';
+      document.body.append(modal);
+      modal.querySelector("form").addEventListener("submit",async e=>{
+        e.preventDefault();const button=e.submitter,msg=modal.querySelector("#tcPublicarQuadraMsg");button.disabled=true;
+        try{const token=sessionStorage.getItem("techcampus_token")||"";const response=await fetch("/api/agendamentos/quadra-publicacoes",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token},body:JSON.stringify({titulo:modal.querySelector("#tcPublicarQuadraTitulo").value,descricao:modal.querySelector("#tcPublicarQuadraDescricao").value,autorizado_divulgacao:modal.querySelector("#tcPublicarQuadraConsentimento").checked})});const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.erro||"Falha ao enviar.");msg.textContent=body.mensagem||"Enviado para aprovação.";e.target.reset();}catch(error){msg.textContent=error.message;}finally{button.disabled=false;}
+      });
+    }
+    window.bootstrap?.Modal.getOrCreateInstance(modal).show();
+  });
   const refreshButton = document.createElement("button");
   refreshButton.type = "button";
   refreshButton.className = "btn btn-outline-secondary btn-sm ms-2";
