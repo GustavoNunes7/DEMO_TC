@@ -135,7 +135,7 @@
         row.append(name,count);stock.append(row);
       });
       const list=$("tcReservasAdminLista");list.replaceChildren();
-      const abertas=reservas.filter(r=>r.status==="pendente"||(r.recurso==="Jogos de Tabuleiro"&&r.status==="aprovado"&&!r.devolvido_em));
+      const abertas=reservas.filter(r=>r.status==="pendente"||(r.recurso==="Jogos de Tabuleiro"&&r.status==="aprovado"&&!r.devolvido_em)||(r.recurso==="Quadra"&&r.status==="aprovado"));
       if(!abertas.length){const p=document.createElement("p");p.className="small text-secondary";p.textContent="Nenhuma solicitação ou empréstimo em aberto.";list.append(p);}
       abertas.forEach(r=>{
         const card=document.createElement("div");card.className="border border-secondary rounded p-3";
@@ -148,6 +148,10 @@
           if(!r.retirado_em){const b=document.createElement("button");b.className="btn btn-sm btn-outline-info";b.textContent="Registrar retirada";b.onclick=()=>acaoEmprestimo(r.id,"retirada");actions.append(b);}
           [["integro","Devolvido íntegro"],["danificado","Danificado"],["perdido","Perdido"]].forEach(([cond,label])=>{const b=document.createElement("button");b.className="btn btn-sm btn-outline-success";b.textContent=label;b.onclick=()=>devolverJogo(r.id,cond);actions.append(b);});
           card.append(actions);
+        }else if(r.recurso==="Quadra"&&r.status==="aprovado"){
+          const state=document.createElement("p");state.className="small text-success mb-2";state.textContent="Reserva confirmada no calendário.";card.append(state);
+          const cancel=document.createElement("button");cancel.type="button";cancel.className="btn btn-sm btn-outline-danger";cancel.textContent="Cancelar reserva";
+          cancel.onclick=()=>cancelarReservaQuadra(r.id);card.append(cancel);
         }else if(r.status==="pendente"){
           const actions=document.createElement("div");actions.className="d-flex gap-2";
           [["aprovado","Autorizar","btn-success"],["rejeitado","Recusar","btn-outline-danger"]].forEach(([status,label,cls])=>{const b=document.createElement("button");b.type="button";b.className="btn btn-sm "+cls;b.textContent=label;b.onclick=()=>decidirReserva(r.id,status);actions.append(b);});card.append(actions);
@@ -166,6 +170,16 @@
       const resultado=await api("/agendamentos/"+id+"/devolucao",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({condicao})});
       if(resultado.cobranca_centavos)alert("Cobrança de reposição: R$ "+(resultado.cobranca_centavos/100).toFixed(2).replace(".",","));
       await carregarPainelAdmin();document.dispatchEvent(new CustomEvent("tc-avisos-atualizados"));
+    }catch(e){alert(e.message);}
+  }
+  async function cancelarReservaQuadra(id){
+    const motivo=window.prompt("Informe o motivo do cancelamento da reserva (obrigatório):");
+    if(motivo===null)return;
+    if(motivo.trim().length<5){alert("Explique o motivo com pelo menos 5 caracteres.");return;}
+    try{
+      await api("/agendamentos/"+id+"/status",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:"cancelado",motivo:motivo.trim()})});
+      await carregarPainelAdmin();document.dispatchEvent(new CustomEvent("tc-avisos-atualizados"));
+      alert("Reserva cancelada. O aluno foi notificado com o motivo.");
     }catch(e){alert(e.message);}
   }
   async function decidirReserva(id,status){
