@@ -77,6 +77,7 @@ if (!colunasUsuario.includes("cpf")) db.exec("ALTER TABLE usuarios ADD COLUMN cp
 if (!colunasUsuario.includes("data_nascimento")) db.exec("ALTER TABLE usuarios ADD COLUMN data_nascimento TEXT");
 if (!colunasUsuario.includes("genero")) db.exec("ALTER TABLE usuarios ADD COLUMN genero TEXT");
 if (!colunasUsuario.includes("observacao")) db.exec("ALTER TABLE usuarios ADD COLUMN observacao TEXT");
+db.exec("CREATE TABLE IF NOT EXISTS quadra_publicacoes (id INTEGER PRIMARY KEY AUTOINCREMENT, usuario_id INTEGER NOT NULL REFERENCES usuarios(id), titulo TEXT NOT NULL, descricao TEXT NOT NULL, autor_nome TEXT NOT NULL, autorizado_divulgacao INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'pendente', criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, aprovado_em TEXT)");
 function notificarAdmins(titulo, mensagem) {
   const admins = db.prepare("SELECT id FROM usuarios WHERE papel='admin' AND ativo=1").all();
   const inserir = db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)");
@@ -1345,8 +1346,9 @@ const catalogoJogosInicial = [
   ["Pula Pirata","Jogo de suspense e coordenação."],
   ["Cai Não Cai","Jogo de habilidade e equilíbrio."]
 ];
-const inserirJogoInicial = db.prepare("INSERT OR IGNORE INTO estoque_jogos(nome,descricao,quantidade_total,quantidade_disponivel) VALUES(?,?,1,1)");
-catalogoJogosInicial.forEach(([nome,descricao])=>inserirJogoInicial.run(nome,descricao));
+const valoresIniciaisJogos={"Xadrez":[2,3500],"Damas":[2,2500],"Dominó":[3,1800],"Cartas de UNO":[3,2500],"Baralho":[4,1200],"Ludo":[2,3000],"Jogo Imobiliário":[2,4500],"Banco Imobiliário":[2,6500],"Jogo da Vida":[2,5500],"Twister":[1,7500],"Imagem & Ação":[2,5000],"Detetive":[2,4800],"Cara a Cara":[2,4200],"Pula Pirata":[2,3800],"Cai Não Cai":[2,4000]};
+const inserirJogoInicial=db.prepare("INSERT OR IGNORE INTO estoque_jogos(nome,descricao,quantidade_total,quantidade_disponivel,valor_reposicao_centavos) VALUES(?,?,?,?,?)");
+catalogoJogosInicial.forEach(([nome,descricao])=>{const [qtd,valor]=valoresIniciaisJogos[nome]||[1,0];inserirJogoInicial.run(nome,descricao,qtd,qtd,valor);db.prepare("UPDATE estoque_jogos SET quantidade_total=?,quantidade_disponivel=?,valor_reposicao_centavos=? WHERE nome=? AND quantidade_total=1 AND quantidade_disponivel=1 AND valor_reposicao_centavos=0").run(qtd,qtd,valor,nome);});
 // Os novos itens do catálogo recebem quantidade demonstrativa inicial; o administrador deve ajustar ao inventário físico real.
 
 r.get("/agendamentos/estoque", autenticar, (req,res) => {
@@ -1398,15 +1400,29 @@ r.get("/agendamentos", autenticar, (req,res) => {
   res.json(rows);
 });
 r.get("/agendamentos/calendario", autenticar, (req,res) => {
-  const rows=db.prepare(`
-    SELECT a.id,a.recurso,a.inicio,a.fim,a.status,
-      CASE WHEN u.papel='admin' THEN 'Agendado pela Administração' ELSE 'Reservado por Aluno' END AS exibicao,
-      CASE WHEN u.papel='admin' THEN 1 ELSE 0 END AS criado_admin
-    FROM agendamentos a JOIN usuarios u ON u.id=a.usuario_id
-    WHERE a.status IN ('pendente','aprovado') AND a.recurso='Quadra'
-    ORDER BY a.inicio
-  `).all();
-  res.json(rows);
+ const reservas=db.prepare("SELECT a.id,a.recurso,a.inicio,a.fim,a.status,CASE WHEN u.papel='admin' THEN 'Agendado pela Administração' ELSE 'Reservado por Aluno' END AS exibicao,CASE WHEN u.papel='admin' THEN 1 ELSE 0 END AS criado_admin FROM agendamentos a JOIN usuarios u ON u.id=a.usuario_id WHERE a.status IN ('pendente','aprovado') AND a.recurso='Quadra' ORDER BY a.inicio").all();
+ const pubs=db.prepare("SELECT id,titulo,descricao,autor_nome,status,'publicacao' AS tipo,'Quadra' AS recurso,titulo AS exibicao,criado_em AS inicio,criado_em AS fim FROM quadra_publicacoes WHERE status='aprovado' AND autorizado_divulgacao=1 ORDER BY criado_em DESC").all().map(p=>({...p,inicio:String(p.inicio).slice(0,10)+'T12:00:00',fim:String(p.fim).slice(0,10)+'T13:00:00'}));
+ res.json([...reservas,...pubs]);
+});
+r.post("/agendamentos/quadra-publicacoes", autenticar, (req,res) => {
+ const titulo=clean(req.body.titulo,120),descricao=clean(req.body.descricao,1500);
+ if(titulo.length<3||descricao.length<5)return bad(res,"Informe título e descrição válidos.");
+ if(req.body.autorizado_divulgacao!==true)return bad(res,"Autorize a divulgação para todos os alunos.");
+ const u=db.prepare("SELECT nome,nome_preferencia FROM usuarios WHERE id=?").get(req.usuario.id);
+ const autor=clean(u?.nome_preferencia||u?.nome||"Aluno",100);
+ const info=db.prepare("INSERT INTO quadra_publicacoes(usuario_id,titulo,descricao,autor_nome,autorizado_divulgacao) VALUES(?,?,?, ?,1)").run(req.usuario.id,titulo,descricao,autor);
+ notificarAdmins("Nova publicação da Quadra",autor+" enviou "+titulo+" para aprovação.");
+ res.status(201).json({ok:true,id:info.lastInsertRowid,mensagem:"Enviado para aprovação da administração."});
+});
+r.get("/agendamentos/quadra-publicacoes/admin", autenticar, admin, (_req,res)=>res.json(db.prepare("SELECT id,titulo,descricao,autor_nome,status,criado_em FROM quadra_publicacoes ORDER BY CASE status WHEN 'pendente' THEN 0 ELSE 1 END,criado_em DESC").all()));
+r.patch("/agendamentos/quadra-publicacoes/:id/status", autenticar, admin, (req,res)=>{
+ const id=positiveId(req.params.id),status=clean(req.body.status,20);
+ if(!allowed(status,["aprovado","rejeitado"]))return bad(res,"Status inválido.");
+ const pub=db.prepare("SELECT * FROM quadra_publicacoes WHERE id=?").get(id);
+ if(!pub)return res.status(404).json({erro:"Publicação não encontrada."});
+ db.prepare("UPDATE quadra_publicacoes SET status=?,aprovado_em=CASE WHEN ?='aprovado' THEN CURRENT_TIMESTAMP ELSE NULL END WHERE id=?").run(status,status,id);
+ db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)").run(pub.usuario_id,status==="aprovado"?"Publicação aprovada":"Publicação não aprovada",status==="aprovado"?"Sua publicação da Quadra foi aprovada e está visível para todos.":"Sua publicação da Quadra não foi aprovada.");
+ res.json({ok:true,status});
 });
 function atualizarBloqueioEmprestimos(usuarioId){
   const atraso=db.prepare(`SELECT MIN(date(a.fim)) AS vencimento
