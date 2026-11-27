@@ -197,6 +197,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           ocorrido: Number(a.ocorrido || 0)
         }))
         .filter(a => /^\d{4}-\d{2}-\d{2}$/.test(a.data))
+        .filter(a => !(reservasQuadra.some(r=>String(r.inicio||"").slice(0,10)===a.data) && /quadra/i.test(a.titulo)))
         .forEach(a => {
           const chave = [a.titulo,a.data,a.local].map(v=>String(v||"").trim().toLocaleLowerCase("pt-BR")).join("|");
           if (!avisosUnicos.has(chave)) avisosUnicos.set(chave,a);
