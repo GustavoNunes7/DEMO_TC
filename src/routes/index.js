@@ -1416,6 +1416,20 @@ r.patch("/agendamentos/estoque/:id", autenticar, admin, (req,res) => {
   db.prepare("UPDATE estoque_jogos SET nome=?,descricao=?,valor_reposicao_centavos=? WHERE id=?").run(nome,descricao,valor,id);
   res.json({ok:true,jogo:get("estoque_jogos",id)});
 });
+r.delete("/agendamentos/estoque/:id", autenticar, admin, (req,res) => {
+  const id=positiveId(req.params.id);
+  const jogo=db.prepare("SELECT * FROM estoque_jogos WHERE id=? AND ativo=1").get(id);
+  if(!jogo)return res.status(404).json({erro:"Jogo não encontrado ou já excluído."});
+  const emprestimosAtivos=db.prepare(`
+    SELECT COUNT(*) AS total FROM agendamento_jogos aj
+    JOIN agendamentos a ON a.id=aj.agendamento_id
+    WHERE aj.jogo_id=? AND a.status IN ('pendente','aprovado')
+      AND a.devolvido_em IS NULL
+  `).get(id).total;
+  if(emprestimosAtivos>0)return res.status(409).json({erro:"Este jogo possui empréstimos pendentes ou em andamento. Aguarde a devolução antes de excluir."});
+  db.prepare("UPDATE estoque_jogos SET ativo=0 WHERE id=?").run(id);
+  res.json({ok:true,mensagem:"Jogo removido do catálogo. O histórico foi preservado."});
+});
 r.post("/agendamentos/estoque/:id/baixa", autenticar, admin, (req,res) => {
   const id=positiveId(req.params.id), quantidade=Number(req.body.quantidade), motivo=clean(req.body.motivo,30);
   const jogo=db.prepare("SELECT * FROM estoque_jogos WHERE id=? AND ativo=1").get(id);
