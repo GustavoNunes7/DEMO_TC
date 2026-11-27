@@ -1969,6 +1969,7 @@
       $("gFinResultado").classList.toggle("text-success",dados.resultado_centavos>=0);
       $("gEstoqueProduto").replaceChildren(...produtos.map(p=>h("option",{value:p.id},p.nome+" (estoque: "+p.estoque+")")));
       if(!produtos.length)$("gEstoqueProduto").append(h("option",{value:""},"Cadastre um produto primeiro"));
+      await carregarEstoqueJogos();
       const max=Math.max(1,...dados.grafico.flatMap(x=>[x.receita,x.despesas]));
       const graf=$("gFinGrafico");graf.replaceChildren();
       for(const item of dados.grafico){
