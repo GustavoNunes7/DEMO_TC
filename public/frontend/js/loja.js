@@ -1560,32 +1560,6 @@
         </div>
 
         <div id="gFinanceiro" class="tc-finance" hidden>
-        <div id="gJogosGestao">
-          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-            <div><h4 class="mb-1">Compras e baixas — Jogos</h4><p class="text-secondary small mb-0">Registre compras, reposições e baixas por dano ou perda.</p></div>
-            <button type="button" class="btn btn-outline-light" id="gJogosAtualizar">Atualizar estoque</button>
-          </div>
-          <form id="gJogosCompraForm" class="border border-secondary rounded-3 p-3 mb-3">
-            <h5 class="mb-3">Adicionar jogo / registrar compra</h5><div class="row g-2">
-              <div class="col-md-4"><label class="form-label" for="gJogoNome">Nome do jogo</label><input id="gJogoNome" class="form-control bg-dark text-white border-secondary" maxlength="100" placeholder="Ex.: Xadrez" required></div>
-              <div class="col-md-4"><label class="form-label" for="gJogoDescricao">Descrição</label><input id="gJogoDescricao" class="form-control bg-dark text-white border-secondary" maxlength="300"></div>
-              <div class="col-md-2"><label class="form-label" for="gJogoQuantidade">Unidades compradas</label><input id="gJogoQuantidade" type="number" min="1" max="500" value="1" class="form-control bg-dark text-white border-secondary" required></div>
-              <div class="col-md-2"><label class="form-label" for="gJogoReposicao">Reposição (R$)</label><input id="gJogoReposicao" type="number" min="0" step="0.01" value="0" class="form-control bg-dark text-white border-secondary"></div>
-              <div class="col-12"><button class="btn btn-danger" type="submit">Registrar compra e adicionar ao estoque</button></div>
-              <div class="col-12"><div id="gJogosCompraMsg" class="small" role="status"></div></div>
-            </div>
-          </form>
-          <form id="gJogosBaixaForm" class="border border-secondary rounded-3 p-3 mb-4">
-            <h5 class="mb-3">Remover unidade danificada ou perdida</h5><div class="row g-2">
-              <div class="col-md-5"><label class="form-label" for="gJogoBaixaId">Jogo</label><select id="gJogoBaixaId" class="form-select bg-dark text-white border-secondary" required></select></div>
-              <div class="col-md-2"><label class="form-label" for="gJogoBaixaQtd">Quantidade</label><input id="gJogoBaixaQtd" type="number" min="1" max="500" value="1" class="form-control bg-dark text-white border-secondary" required></div>
-              <div class="col-md-3"><label class="form-label" for="gJogoBaixaMotivo">Motivo</label><select id="gJogoBaixaMotivo" class="form-select bg-dark text-white border-secondary"><option value="danificado">Danificado</option><option value="perdido">Perdido</option></select></div>
-              <div class="col-md-2 d-flex align-items-end"><button class="btn btn-outline-danger w-100" type="submit">Registrar baixa</button></div>
-              <div class="col-12"><div id="gJogosBaixaMsg" class="small" role="status"></div></div>
-            </div>
-          </form>
-          <div id="gJogosTabela"></div>
-        </div>
           <style>
             /* TechCampus Financeiro — tema escuro como padrão */
             #gFinanceiro{
@@ -1800,9 +1774,6 @@
     $("tabGTok").onclick = () => aba("tokens");
     $("tabGAvisos").onclick = () => aba("avisos");
     $("tabGFin").onclick = () => aba("financeiro");
-    $("gJogosCompraForm").addEventListener("submit", registrarCompraJogos);
-    $("gJogosBaixaForm").addEventListener("submit", registrarBaixaJogos);
-    $("gJogosAtualizar").onclick = carregarEstoqueJogos;
     $("gSubTabProdutos").onclick = () => alternarCatalogo("produtos");
     $("gSubTabJogos").onclick = () => alternarCatalogo("jogos");
     $("gJogosBusca").addEventListener("input", carregarCatalogoJogos);
@@ -1910,11 +1881,38 @@
     $("gSubTabJogos").classList.toggle("btn-danger",jogos);$("gSubTabJogos").classList.toggle("btn-outline-light",!jogos);
     if(jogos)carregarCatalogoJogos();
   }
+  function categoriaJogo(nome){
+    const n=norm(nome);
+    if(/xadrez|damas|detetive|cara a cara/.test(n))return "Estratégia";
+    if(/uno|baralho|dominó/.test(n))return "Cartas e peças";
+    if(/twister|pula pirata|cai não cai/.test(n))return "Diversão";
+    if(/vida|imobiliário|ludo/.test(n))return "Tabuleiro";
+    return "Jogos de tabuleiro";
+  }
+  async function editarJogoEstoque(j){
+    const nome=window.prompt("Nome do jogo:",j.nome);if(nome===null)return;
+    const descricao=window.prompt("Categoria / descrição:",j.descricao||categoriaJogo(j.nome));if(descricao===null)return;
+    const valorTexto=window.prompt("Valor de reposição (R$):",(Number(j.valor_reposicao_centavos||0)/100).toFixed(2));if(valorTexto===null)return;
+    const valor=Math.round(Number(valorTexto.replace(",","."))*100);
+    if(!nome.trim()||!Number.isSafeInteger(valor)||valor<0){alert("Confira o nome e o valor.");return;}
+    try{await api("/agendamentos/estoque/"+j.id,{method:"PATCH",body:JSON.stringify({nome:nome.trim(),descricao:descricao.trim(),valor_reposicao_centavos:valor})});await carregarCatalogoJogos();}
+    catch(e){alert(e.message||"Não foi possível editar o jogo.");}
+  }
   async function carregarCatalogoJogos(){
     const alvo=$("gJogosCatalogoTabela");if(!alvo)return;
-    try{const jogos=await api("/agendamentos/estoque"),q=norm($("gJogosBusca").value||"");
-      const rows=jogos.filter(j=>!q||norm(j.nome+" "+j.descricao).includes(q)).map(j=>h("tr",{},h("td",{},j.nome),h("td",{},j.descricao||"—"),h("td",{},String(j.quantidade_total??"—")),h("td",{},String(j.quantidade_disponivel??0)),h("td",{},valorReal(j.valor_reposicao_centavos))));
-      alvo.replaceChildren(tabela(["Jogo","Descrição","Total","Disponíveis","Reposição"],h("tbody",{},rows)));
+    try{
+      const jogos=await api("/agendamentos/estoque"),q=norm($("gJogosBusca").value||"");
+      const filtrados=jogos.filter(j=>!q||norm(j.nome+" "+categoriaJogo(j.nome)+" "+j.descricao).includes(q));
+      const linhas=filtrados.map(j=>{
+        const total=Number(j.quantidade_total||0),disponiveis=Number(j.quantidade_disponivel||0),emprestados=Math.max(0,total-disponiveis);
+        const status=disponiveis<=0?"Sem estoque":disponiveis<=2?"Estoque baixo":"Disponível";
+        const badge=h("span",{class:"badge "+(disponiveis<=0?"bg-danger":disponiveis<=2?"bg-warning text-dark":"bg-success")},status);
+        const editar=h("button",{type:"button",class:"btn btn-sm btn-outline-light"}, "Editar");
+        editar.addEventListener("click",()=>editarJogoEstoque(j));
+        return h("tr",{},h("td",{},j.nome),h("td",{},categoriaJogo(j.nome)),h("td",{},String(emprestados)),h("td",{},String(disponiveis)),h("td",{},badge),h("td",{},editar));
+      });
+      alvo.replaceChildren(tabela(["Jogo","Categoria","Emprestados","Estoque","Status","Editar"],h("tbody",{},linhas)));
+      if(!filtrados.length)alvo.textContent="Nenhum jogo encontrado.";
     }catch(e){alvo.textContent=e.message;}
   }
   async function carregarEstoqueJogos() {
@@ -1938,7 +1936,6 @@
       await api("/agendamentos/estoque",{method:"POST",body:JSON.stringify({nome,descricao,quantidade,valor_reposicao_centavos:valor})});
       msg.textContent="Compra registrada e unidades adicionadas ao estoque.";
       $("gJogoNome").value=""; $("gJogoDescricao").value=""; $("gJogoQuantidade").value="1";
-      await carregarEstoqueJogos();
     } catch(e) { msg.textContent=e.message; } finally { if(btn)btn.disabled=false; }
   }
   async function registrarBaixaJogos(event) {
