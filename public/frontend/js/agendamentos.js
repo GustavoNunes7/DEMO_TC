@@ -18,7 +18,7 @@
     if(!form||!body||$("tcJogosEscolha"))return;
     const box=document.createElement("div");
     box.id="tcJogosEscolha";box.className="mt-3";box.hidden=true;
-    box.innerHTML='<div class="p-3 rounded-3 border border-secondary bg-black bg-opacity-25 mb-3"><div class="d-flex align-items-center gap-2 mb-1"><i class="bi bi-controller text-danger fs-5"></i><strong>Selecione os jogos</strong></div><p class="small text-secondary mb-0">Marque os jogos desejados e informe a quantidade. A retirada depende da aprovação da administração.</p></div><div id="tcJogosLista" class="row g-2"></div><div class="mt-3 p-3 rounded-3 border border-warning border-opacity-50"><label class="form-label fw-bold" for="tcJogoDevolucao"><i class="bi bi-calendar-check me-1"></i>Devolução em até 14 dias</label><input id="tcJogoDevolucao" type="date" class="form-control bg-dark text-white border-secondary" required><div class="small text-secondary mt-2">O prazo máximo de empréstimo é de duas semanas, contadas a partir da data solicitada para retirada.</div></div>';
+    box.innerHTML='<div class="p-3 rounded-3 border border-secondary bg-black bg-opacity-25 mb-3"><div class="d-flex align-items-center gap-2 mb-1"><i class="bi bi-controller text-danger fs-5"></i><strong>Selecione os jogos</strong></div><p class="small text-secondary mb-0">Marque os jogos desejados e informe a quantidade. A retirada depende da aprovação da administração.</p></div><div id="tcJogosLista" class="row g-2"></div><div class="mt-3 p-3 rounded-3 border border-warning border-opacity-50"><div class="fw-bold"><i class="bi bi-calendar-check me-1"></i>Prazo de empréstimo: 14 dias</div><div class="small text-secondary mt-2">A contagem começa automaticamente quando a administração registra a retirada. Não é necessário informar a data de devolução.</div></div>';
     body.insertBefore(box,$("agendamentoMsg"));
   }
   async function carregarEstoque(){
@@ -50,14 +50,11 @@
     event.preventDefault();
     const recurso=$("agendamentoTipo").value;
     const data=$("agendamentoData").value,horario=$("agendamentoHorario").value;
-    if(!data||!horario)return mensagem("Selecione data e horário.",true);
-    const inicio=dataLocal(data,horario);
+    if(recurso!=="Jogos de Tabuleiro"&&(!data||!horario))return mensagem("Selecione data e horário.",true);
+    const inicio=recurso==="Jogos de Tabuleiro"?new Date().toISOString().slice(0,19):dataLocal(data,horario);
     const jogos=recurso==="Jogos de Tabuleiro"?selecionados():[];
-    if(recurso==="Jogos de Tabuleiro"&&!jogos.length)return mensagem("Selecione pelo menos um jogo.",true);
-    const dataDevolucao=$("tcJogoDevolucao")?.value;
-    const fim=recurso==="Jogos de Tabuleiro"?(dataDevolucao?dataDevolucao+"T23:59:00":""):fimUmaHora(inicio);
-    const limiteEmprestimo=new Date(inicio);limiteEmprestimo.setDate(limiteEmprestimo.getDate()+14);
-    if(recurso==="Jogos de Tabuleiro"&&(!dataDevolucao||Date.parse(fim)<=Date.parse(inicio)||Date.parse(dataDevolucao+"T23:59:00")>limiteEmprestimo.getTime()))return mensagem("O empréstimo deve ser devolvido em até 14 dias.",true);
+    if(recurso==="Jogos de Tabuleiro"&&jogos.reduce((s,j)=>s+j.quantidade,0)<2)return mensagem("Selecione no mínimo 2 unidades de jogos por reserva.",true);
+    const fim=recurso==="Jogos de Tabuleiro"?new Date(Date.now()+14*24*60*60*1000).toISOString().slice(0,19):fimUmaHora(inicio);
     const button=$("formAgendamento").querySelector('[type="submit"]');button.disabled=true;
     try{
       const reserva=await api("/agendamentos",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({recurso,inicio,fim,jogos})});
@@ -74,6 +71,9 @@
       const trigger=event.relatedTarget;
       const recurso=trigger?.dataset.recurso||"Quadra";
       $("agendamentoTipo").value=recurso;
+      const somenteJogos=recurso==="Jogos de Tabuleiro";
+      for(const campo of [$("agendamentoData"),$("agendamentoHorario")]){const grupo=campo?.closest(".mb-3")||campo?.parentElement;if(grupo)grupo.hidden=somenteJogos;}
+      $("agendamentoData").required=!somenteJogos;$("agendamentoHorario").required=!somenteJogos;
       $("agendamentoTitulo").textContent=recurso==="Quadra"?"Agendar Quadra":"Reservar Jogos de Tabuleiro";
       const box=$("tcJogosEscolha");box.hidden=recurso!=="Jogos de Tabuleiro";
       const hoje=new Date();$("agendamentoData").min=hoje.getFullYear()+"-"+String(hoje.getMonth()+1).padStart(2,"0")+"-"+String(hoje.getDate()).padStart(2,"0");
@@ -81,13 +81,13 @@
       form.reset();
       $("agendamentoTipo").value=recurso;
       if(recurso==="Jogos de Tabuleiro"){
-        const devolucao=$("tcJogoDevolucao");const retirada=$("agendamentoData").value;const limite=new Date(retirada+"T12:00:00");limite.setDate(limite.getDate()+14);const pad=n=>String(n).padStart(2,"0");devolucao.min=retirada;devolucao.max=limite.getFullYear()+"-"+pad(limite.getMonth()+1)+"-"+pad(limite.getDate());const padrao=new Date(retirada+"T12:00:00");padrao.setDate(padrao.getDate()+14);devolucao.value=padrao.getFullYear()+"-"+pad(padrao.getMonth()+1)+"-"+pad(padrao.getDate());
+        // Prazo calculado automaticamente quando a administração registra a retirada.
         try{await carregarEstoque();}catch(e){mensagem(e.message,true);}
       }
       const submit=form.querySelector('[type="submit"]');
       submit.textContent=admin?"Confirmar agendamento":"Solicitar reserva";
     });
-    $("agendamentoData").addEventListener("change",()=>{const campo=$("tcJogoDevolucao");if(campo){const retirada=$("agendamentoData").value;const limite=new Date(retirada+"T12:00:00");limite.setDate(limite.getDate()+14);const pad=n=>String(n).padStart(2,"0");campo.min=retirada;campo.max=limite.getFullYear()+"-"+pad(limite.getMonth()+1)+"-"+pad(limite.getDate());if(campo.value<campo.min||campo.value>campo.max)campo.value=campo.max;}});
+    // Data de retirada registrada pela administração.
     form.addEventListener("submit",enviarReserva);
   }
   function montarPainelAdmin(){
@@ -142,9 +142,9 @@
         const card=document.createElement("div");card.className="border border-secondary rounded p-3";
         const start=new Date(String(r.inicio).replace(" ","T")),end=new Date(String(r.fim).replace(" ","T"));
         const title=document.createElement("strong");title.textContent=r.recurso+" · "+start.toLocaleDateString("pt-BR")+" · "+start.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+"–"+end.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
-        const who=document.createElement("p");who.className="small text-secondary mb-2";who.textContent="Aluno responsável: "+(r.solicitante||"Não identificado");card.append(title,who);if(r.recurso==="Jogos de Tabuleiro"){const games=document.createElement("p");games.className="small mb-1";games.textContent="Jogos: "+(r.jogos||"Não informado");const due=document.createElement("p");due.className="small mb-2";due.textContent="Prazo para devolução: "+end.toLocaleDateString("pt-BR")+" · Limite: 14 dias";card.append(games,due);if(r.retirado_em){const pickup=document.createElement("p");pickup.className="small text-secondary mb-2";pickup.textContent="Retirada registrada em: "+new Date(String(r.retirado_em).replace(" ","T")).toLocaleString("pt-BR");card.append(pickup);}}
+        const who=document.createElement("p");who.className="small text-secondary mb-2";who.textContent="Aluno responsável: "+(r.solicitante||"Não identificado");card.append(title,who);if(r.recurso==="Jogos de Tabuleiro"){const games=document.createElement("p");games.className="small mb-1";games.textContent="Jogos: "+(r.jogos||"Não informado");const due=document.createElement("p");due.className="small mb-2";due.textContent="Devolução até: "+end.toLocaleDateString("pt-BR")+" · Prazo de 14 dias";card.append(games,due);if(r.retirado_em){const pickup=document.createElement("p");pickup.className="small text-secondary mb-2";pickup.textContent="Retirado em: "+new Date(String(r.retirado_em).replace(" ","T")).toLocaleString("pt-BR");card.append(pickup);}}
         if(r.recurso==="Jogos de Tabuleiro"&&r.status==="aprovado"){
-          const state=document.createElement("p");state.className="small mb-2 "+(r.atrasado?"text-danger":"text-secondary");state.textContent=r.atrasado?"EM ATRASO — prazo de devolução passou":(r.retirado_em?"EMPRESTADO — aguardando devolução":"Aprovado — aguardando retirada do aluno");card.append(state);
+          const state=document.createElement("p");state.className="small mb-2 "+(r.atrasado?"text-danger":"text-secondary");state.textContent=r.atrasado?"EM ATRASO — prazo de devolução passou":(r.retirado_em?"EMPRESTADO — prazo de 14 dias em andamento":"Aprovado — aguardando retirada do aluno");card.append(state);
           const actions=document.createElement("div");actions.className="d-flex flex-wrap gap-2";
           if(!r.retirado_em){const b=document.createElement("button");b.className="btn btn-sm btn-outline-info";b.textContent="Registrar retirada";b.onclick=()=>acaoEmprestimo(r.id,"retirada");actions.append(b);}
           [["integro","Devolvido íntegro"],["danificado","Danificado"],["perdido","Perdido"]].forEach(([cond,label])=>{const b=document.createElement("button");b.className="btn btn-sm btn-outline-success";b.textContent=label;b.onclick=()=>devolverJogo(r.id,cond);actions.append(b);});
