@@ -1515,9 +1515,25 @@
         </div>
         <div id="gTokens" hidden>
           <div class="d-flex flex-wrap gap-2 mb-3">
-            <p class="text-secondary small mb-0 me-auto">Consulte os tokens de retirada e o estado de cada pedido.</p>
-            <button type="button" class="btn btn-outline-light" id="gAtualizarTokens"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar tokens</button>
+            <input id="gTokenBusca" type="search" class="form-control bg-dark text-white border-secondary" style="max-width:320px" placeholder="Pesquisar aluno ou e-mail">
+            <select id="gTokenStatusPedido" class="form-select bg-dark text-white border-secondary" style="max-width:210px" aria-label="Filtrar por status do pedido">
+              <option value="">Todos os status do pedido</option>
+              <option value="pendente">Pendente</option>
+              <option value="aprovado">Aprovado</option>
+              <option value="entregue">Entregue</option>
+              <option value="rejeitado">Rejeitado</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+            <select id="gTokenStatusEstado" class="form-select bg-dark text-white border-secondary" style="max-width:190px" aria-label="Filtrar por estado do token">
+              <option value="">Todos os tokens</option>
+              <option value="ativo">Ativo</option>
+              <option value="utilizado">Utilizado</option>
+              <option value="expirado">Expirado</option>
+            </select>
+            <button type="button" class="btn btn-outline-secondary" id="gTokenLimpar">Limpar filtros</button>
+            <button type="button" class="btn btn-outline-light ms-auto" id="gAtualizarTokens"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar tokens</button>
           </div>
+          <p id="gTokenContagem" class="small text-secondary mb-2" aria-live="polite"></p>
           <div id="gTokensTabela"></div>
         </div>
         <div id="gAvisos" hidden>
@@ -1762,6 +1778,15 @@
     $("gFinDespesaForm").addEventListener("submit", registrarDespesaFinanceira);
 
     $("gAtualizarTokens").onclick = carregarTokensAdmin;
+    ["gTokenBusca", "gTokenStatusPedido", "gTokenStatusEstado"].forEach((id) => {
+      $(id).addEventListener(id === "gTokenBusca" ? "input" : "change", renderTokensAdmin);
+    });
+    $("gTokenLimpar").onclick = () => {
+      $("gTokenBusca").value = "";
+      $("gTokenStatusPedido").value = "";
+      $("gTokenStatusEstado").value = "";
+      renderTokensAdmin();
+    };
     $("gFormAviso").addEventListener("submit", salvarAvisoAdmin);
     $("gAvisoCancelar").onclick = resetAvisoAdmin;
     $("gAvisoAtualizar").onclick = carregarAvisosAdmin;
@@ -1991,26 +2016,48 @@
     finally{btn.disabled=false;}
   }
 
+  let tokensAdminCache = [];
+
+  function renderTokensAdmin() {
+    const container = $("gTokensTabela");
+    if (!container) return;
+    const busca = norm($("gTokenBusca")?.value || "");
+    const statusPedido = $("gTokenStatusPedido")?.value || "";
+    const statusEstado = $("gTokenStatusEstado")?.value || "";
+    const agora = Date.now();
+    const filtrados = tokensAdminCache.filter((t) => {
+      const estado = t.usado ? "utilizado" : (t.expira_em && Number(t.expira_em) < agora ? "expirado" : "ativo");
+      const correspondeBusca = !busca || norm((t.cliente || "") + " " + (t.cliente_email || "")).includes(busca);
+      return correspondeBusca &&
+        (!statusPedido || t.pedido_status === statusPedido) &&
+        (!statusEstado || estado === statusEstado);
+    });
+    const contagem = $("gTokenContagem");
+    if (contagem) contagem.textContent = filtrados.length + " de " + tokensAdminCache.length + " token(s)";
+    if (!filtrados.length) {
+      container.replaceChildren(h("p", { class: "text-secondary py-3" },
+        tokensAdminCache.length ? "Nenhum token corresponde aos filtros selecionados." : "Ainda não há tokens de retirada."));
+      return;
+    }
+    const corpo = h("tbody", {}, filtrados.map((t) => h("tr", {},
+      h("td", {}, "#" + t.pedido_id),
+      h("td", {}, t.cliente || "—", h("div", { class: "small text-secondary" }, t.cliente_email || "")),
+      h("td", {}, h("code", { class: "fs-6" }, t.token)),
+      h("td", {}, STATUS[t.pedido_status] || t.pedido_status || "—"),
+      h("td", {}, PAG[t.pagamento_status] || t.pagamento_status || "Sem pagamento"),
+      h("td", {}, t.usado ? "Utilizado" : (t.expira_em && Number(t.expira_em) < agora ? "Expirado" : "Ativo")),
+      h("td", {}, t.expira_em ? new Date(Number(t.expira_em)).toLocaleString("pt-BR") : "—")
+    )));
+    container.replaceChildren(tabela(["Pedido", "Aluno", "Token", "Status pedido", "Pagamento", "Estado token", "Expiração"], corpo));
+  }
+
   async function carregarTokensAdmin() {
     const container = $("gTokensTabela");
     if (!container) return;
     container.replaceChildren(h("p", { class: "text-secondary" }, "Carregando tokens..."));
     try {
-      const tokens = await api("/admin/tokens");
-      if (!tokens.length) {
-        container.replaceChildren(h("p", { class: "text-secondary" }, "Ainda não há tokens de retirada."));
-        return;
-      }
-      const corpo = h("tbody", {}, tokens.map((t) => h("tr", {},
-        h("td", {}, "#" + t.pedido_id),
-        h("td", {}, t.cliente || "—", h("div", { class: "small text-secondary" }, t.cliente_email || "")),
-        h("td", {}, h("code", { class: "fs-6" }, t.token)),
-        h("td", {}, STATUS[t.pedido_status] || t.pedido_status || "—"),
-        h("td", {}, PAG[t.pagamento_status] || t.pagamento_status || "Sem pagamento"),
-        h("td", {}, t.usado ? "Utilizado" : (t.expira_em && t.expira_em < Date.now() ? "Expirado" : "Ativo")),
-        h("td", {}, t.expira_em ? new Date(t.expira_em).toLocaleString("pt-BR") : "—")
-      )));
-      container.replaceChildren(tabela(["Pedido", "Aluno", "Token", "Status pedido", "Pagamento", "Estado token", "Expiração"], corpo));
+      tokensAdminCache = await api("/admin/tokens");
+      renderTokensAdmin();
     } catch (e) {
       container.replaceChildren(h("div", { class: "alert alert-danger" }, e.message));
     }
