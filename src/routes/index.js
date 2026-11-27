@@ -1454,7 +1454,7 @@ r.get("/agendamentos", autenticar, (req,res) => {
        FROM agendamento_jogos aj JOIN estoque_jogos e ON e.id=aj.jogo_id
        WHERE aj.agendamento_id=a.id) AS jogos
       FROM agendamentos a JOIN usuarios u ON u.id=a.usuario_id ORDER BY a.inicio DESC`).all()
-    : db.prepare(`SELECT a.id,a.recurso,a.inicio,a.fim,a.status,a.criado_em,a.retirado_em,a.devolvido_em,a.cobranca_centavos,a.cobranca_motivo,
+    : db.prepare(`SELECT a.id,a.recurso,a.inicio,a.fim,a.status,a.motivo_cancelamento,a.criado_em,a.retirado_em,a.devolvido_em,a.cobranca_centavos,a.cobranca_motivo,
       CASE WHEN a.recurso='Jogos de Tabuleiro' AND a.status='aprovado' AND a.devolvido_em IS NULL AND date(a.fim)<date('now') THEN 1 ELSE 0 END AS atrasado,
       (SELECT group_concat(e.nome || ' × ' || aj.quantidade, ', ') FROM agendamento_jogos aj JOIN estoque_jogos e ON e.id=aj.jogo_id WHERE aj.agendamento_id=a.id) AS jogos
       FROM agendamentos a WHERE a.usuario_id=? ORDER BY a.inicio DESC`).all(req.usuario.id);
