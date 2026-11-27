@@ -246,9 +246,21 @@ document.addEventListener("DOMContentLoaded", async () => {
           ocorrido: Number(a.ocorrido || 0)
         }))
         .filter(a => /^\d{4}-\d{2}-\d{2}$/.test(a.data))
-        .filter(a => !(reservasQuadra.some(r=>String(r.inicio||"").slice(0,10)===a.data) && /quadra/i.test(a.titulo)))
+        // Reservas/publicações da Quadra já são exibidas diretamente no calendário.
+        // Evita repetir o mesmo acontecimento quando também existe um aviso manual
+        // relacionado à Quadra na tabela de avisos.
+        .filter(a => {
+          const textoAviso = [a.titulo, a.local, a.descricao].join(" ").toLocaleLowerCase("pt-BR");
+          const mencionaQuadra = /quadra/i.test(textoAviso);
+          const existeItemQuadraNoDia = reservasQuadra.some(r =>
+            String(r.inicio || "").slice(0, 10) === a.data
+          );
+          return !(mencionaQuadra && existeItemQuadraNoDia);
+        })
         .forEach(a => {
-          const chave = [a.titulo,a.data,a.local].map(v=>String(v||"").trim().toLocaleLowerCase("pt-BR")).join("|");
+          // Um mesmo aviso não deve aparecer duas vezes no mesmo dia
+          // apenas porque foi cadastrado com locais/descrições diferentes.
+          const chave = [a.titulo, a.data].map(v=>String(v||"").trim().toLocaleLowerCase("pt-BR")).join("|");
           if (!avisosUnicos.has(chave)) avisosUnicos.set(chave,a);
         });
       avisos = [...avisosUnicos.values()];
