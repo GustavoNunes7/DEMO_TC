@@ -1356,6 +1356,22 @@ db.prepare("UPDATE estoque_jogos SET quantidade_total=3,quantidade_disponivel=3 
 db.prepare("UPDATE estoque_jogos SET quantidade_total=1,quantidade_disponivel=1 WHERE nome='Jogo da Vida' AND quantidade_total=quantidade_disponivel").run();
 // Os novos itens do catálogo recebem quantidade demonstrativa inicial; o administrador deve ajustar ao inventário físico real.
 
+r.get("/agendamentos/estoque/relatorio/mais-emprestados", autenticar, admin, (_req,res) => {
+  const rows=db.prepare(`
+    SELECT e.id,e.nome,COALESCE(SUM(aj.quantidade),0) AS unidades_emprestadas,
+      COUNT(DISTINCT a.id) AS vezes_emprestado
+    FROM estoque_jogos e
+    LEFT JOIN agendamento_jogos aj ON aj.jogo_id=e.id
+    LEFT JOIN agendamentos a ON a.id=aj.agendamento_id
+      AND a.recurso='Jogos de Tabuleiro'
+      AND a.status IN ('aprovado','entregue')
+    WHERE e.ativo=1
+    GROUP BY e.id,e.nome
+    ORDER BY unidades_emprestadas DESC,vezes_emprestado DESC,e.nome
+    LIMIT 10
+  `).all();
+  res.json(rows);
+});
 r.get("/agendamentos/estoque", autenticar, (req,res) => {
   const adminUser=req.usuario.papel==="admin";
   const sql=adminUser
