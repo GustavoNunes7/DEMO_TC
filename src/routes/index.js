@@ -1579,9 +1579,14 @@ r.patch("/agendamentos/:id", autenticar, admin, (req,res)=>{
  if(!ag||ag.recurso!=="Quadra")return res.status(404).json({erro:"Reserva da Quadra não encontrada."});
  if(!["pendente","aprovado"].includes(ag.status))return res.status(409).json({erro:"Somente reservas pendentes ou aprovadas podem ser editadas."});
  if(!Number.isFinite(Date.parse(inicio))||!Number.isFinite(Date.parse(fim))||Date.parse(inicio)>=Date.parse(fim)||Date.parse(inicio)<Date.now())return bad(res,"Informe uma data e horário válidos no futuro.");
+ if(Date.parse(fim)-Date.parse(inicio)>3*60*60*1000)return bad(res,"A reserva da Quadra pode ter no máximo 3 horas.");
+ const titulo=req.body.nome===undefined?ag.titulo:clean(req.body.nome,120);
+ const descricao=req.body.descricao===undefined?ag.descricao:clean(req.body.descricao,1000);
+ if(titulo!==null&&titulo!==undefined&&titulo.length<3)return bad(res,"Informe um nome de atividade válido.");
+ if(descricao!==null&&descricao!==undefined&&descricao.length<5)return bad(res,"Informe uma descrição com pelo menos 5 caracteres.");
  const conflito=db.prepare("SELECT id FROM agendamentos WHERE recurso='Quadra' AND id<>? AND status IN ('pendente','aprovado') AND inicio<? AND fim>?").get(id,fim,inicio);
  if(conflito)return res.status(409).json({erro:"O novo horário conflita com outra reserva."});
- db.prepare("UPDATE agendamentos SET inicio=?,fim=? WHERE id=?").run(inicio,fim,id);
+ db.prepare("UPDATE agendamentos SET inicio=?,fim=?,titulo=?,descricao=? WHERE id=?").run(inicio,fim,titulo,descricao,id);
  db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)").run(ag.usuario_id,"Reserva da Quadra alterada","A administração alterou sua reserva para "+inicio.replace("T"," ")+" até "+fim.replace("T"," ")+".");
  res.json({ok:true,agendamento:get("agendamentos",id)});
 });
