@@ -1503,7 +1503,8 @@ r.patch("/agendamentos/quadra-publicacoes/:id/status", autenticar, admin, (req,r
 function atualizarBloqueioEmprestimos(usuarioId){
   const atraso=db.prepare(`SELECT MIN(date(a.fim)) AS vencimento
     FROM agendamentos a WHERE a.usuario_id=? AND a.recurso='Jogos de Tabuleiro'
-    AND a.status='aprovado' AND a.devolvido_em IS NULL AND date(a.fim)<=date('now','-7 days')`).get(usuarioId);
+    AND a.status='aprovado' AND a.retirado_em IS NOT NULL AND a.devolvido_em IS NULL
+    AND date(a.fim)<=date('now','-7 days')`).get(usuarioId);
   if(atraso?.vencimento){
     db.prepare("UPDATE usuarios SET emprestimos_bloqueado_ate=MAX(COALESCE(emprestimos_bloqueado_ate,''),date('now','+30 days')) WHERE id=?").run(usuarioId);
   }
@@ -1512,17 +1513,19 @@ function atualizarBloqueioEmprestimos(usuarioId){
 }
 r.post("/agendamentos", autenticar, (req, res) => {
   const recurso=clean(req.body.recurso,120), inicio=clean(req.body.inicio,40), fim=clean(req.body.fim,40);
-  if(!allowed(recurso,["Quadra","Jogos de Tabuleiro"]) || !Number.isFinite(Date.parse(inicio)) || !Number.isFinite(Date.parse(fim)) || Date.parse(inicio)>=Date.parse(fim) || Date.parse(inicio)<Date.now()) return bad(res,"Recurso ou período inválido.");
-  if(recurso==="Jogos de Tabuleiro" && Date.parse(fim)-Date.parse(inicio)>15*24*60*60*1000) return bad(res,"O prazo máximo de empréstimo é de 14 dias.");
+  const agora=new Date();
+  const inicioFinal=recurso==="Jogos de Tabuleiro"?agora.toISOString().slice(0,19):inicio;
+  const fimFinal=recurso==="Jogos de Tabuleiro"?new Date(agora.getTime()+14*24*60*60*1000).toISOString().slice(0,19):fim;
+  if(!allowed(recurso,["Quadra","Jogos de Tabuleiro"]) || !Number.isFinite(Date.parse(inicioFinal)) || !Number.isFinite(Date.parse(fimFinal)) || Date.parse(inicioFinal)>=Date.parse(fimFinal) || Date.parse(inicioFinal)<Date.now()) return bad(res,"Recurso ou período inválido.");
   const adminUser=req.usuario.papel==="admin";
-  if(recurso==="Jogos de Tabuleiro" && !adminUser){
+  if(!adminUser){
     const bloqueio=atualizarBloqueioEmprestimos(req.usuario.id);
-    if(bloqueio) return res.status(403).json({erro:"Você está temporariamente impedido de solicitar empréstimos até "+bloqueio+" por atraso anterior."});
+    if(bloqueio) return res.status(403).json({erro:"Você está impedido de reservar jogos e quadra até "+bloqueio+" por atraso anterior."});
   }
   const ocupado=recurso==="Quadra" ? db.prepare("SELECT id FROM agendamentos WHERE recurso=? AND status IN ('pendente','aprovado') AND inicio<? AND fim>?").get(recurso,fim,inicio) : null;
   if(ocupado) return res.status(409).json({erro:"Horário já reservado."});
   const jogos=Array.isArray(req.body.jogos)?req.body.jogos:[];
-  if(recurso==="Jogos de Tabuleiro" && !jogos.length) return bad(res,"Selecione pelo menos um jogo disponível.");
+  if(recurso==="Jogos de Tabuleiro" && jogos.reduce((s,item)=>s+Number(item.quantidade||0),0)<2) return bad(res,"Selecione no mínimo 2 unidades de jogos por reserva.");
   if(recurso==="Quadra" && jogos.length) return bad(res,"Não envie jogos para uma reserva de quadra.");
   const criar=db.transaction(()=>{
     for(const item of jogos){
@@ -1532,7 +1535,7 @@ r.post("/agendamentos", autenticar, (req, res) => {
       if(!jogo || jogo.quantidade_disponivel<quantidade) throw new Error("Estoque insuficiente para "+(jogo?.nome||"um dos jogos")+".");
     }
     const status=adminUser?"aprovado":"pendente";
-    const info=db.prepare("INSERT INTO agendamentos(usuario_id,recurso,inicio,fim,status) VALUES(?,?,?,?,?)").run(req.usuario.id,recurso,inicio,fim,status);
+    const info=db.prepare("INSERT INTO agendamentos(usuario_id,recurso,inicio,fim,status) VALUES(?,?,?,?,?)").run(req.usuario.id,recurso,inicioFinal,fimFinal,status);
     for(const item of jogos){
       const jogoId=positiveId(item.jogo_id), quantidade=Number(item.quantidade);
       db.prepare("UPDATE estoque_jogos SET quantidade_disponivel=quantidade_disponivel-? WHERE id=?").run(quantidade,jogoId);
@@ -1548,7 +1551,7 @@ r.post("/agendamentos", autenticar, (req, res) => {
 r.patch("/agendamentos/:id/retirada", autenticar, admin, (req,res) => {
   const ag=get("agendamentos",positiveId(req.params.id));
   if(!ag || ag.recurso!=="Jogos de Tabuleiro" || ag.status!=="aprovado" || ag.retirado_em) return res.status(409).json({erro:"Empréstimo não está pronto para retirada."});
-  db.prepare("UPDATE agendamentos SET retirado_em=CURRENT_TIMESTAMP WHERE id=?").run(ag.id);
+  db.prepare("UPDATE agendamentos SET retirado_em=CURRENT_TIMESTAMP, inicio=CURRENT_TIMESTAMP, fim=datetime(CURRENT_TIMESTAMP, '+14 days') WHERE id=?").run(ag.id);
   res.json(get("agendamentos",ag.id));
 });
 r.patch("/agendamentos/:id/devolucao", autenticar, admin, (req,res) => {
