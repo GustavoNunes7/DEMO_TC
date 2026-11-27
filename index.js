@@ -29,8 +29,8 @@ app.use((err, req, res, next) => {
 ready
   .then(() => {
     if (require.main === module)
-      app.listen(PORT, () =>
-        console.log(`TechCampus: http://localhost:${PORT}`),
+      app.listen(PORT, "0.0.0.0", () =>
+        console.log(`TechCampus disponível na porta ${PORT} (0.0.0.0)`),
       );
   })
   .catch(console.error);
