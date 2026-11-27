@@ -44,20 +44,23 @@
     return [...document.querySelectorAll("#tcJogosLista input[data-jogo-id]:checked")].map(check=>({jogo_id:Number(check.dataset.jogoId),quantidade:Number(document.querySelector('[data-quantidade-jogo="'+check.dataset.jogoId+'"]').value)}));
   }
   function dataLocal(data,hora){return data+"T"+hora+":00";}
-  function fimUmaHora(inicio){const d=new Date(inicio);d.setHours(d.getHours()+1);const pad=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes())+":00";}
+  function fimUmaHora(inicio,horas=1){const d=new Date(inicio);d.setHours(d.getHours()+horas);const pad=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes())+":00";}
   function mensagem(texto,erro=false){const el=$("agendamentoMsg");if(el){el.textContent=texto;el.className="small mt-3 mb-0 "+(erro?"text-danger":"text-success");}}
   async function enviarReserva(event){
     event.preventDefault();
     const recurso=$("agendamentoTipo").value;
     const data=$("agendamentoData").value,horario=$("agendamentoHorario").value;
+    const nome=$("agendamentoNome")?.value.trim()||"",descricao=$("agendamentoDescricao")?.value.trim()||"";
+    if(recurso==="Quadra"&&(nome.length<3||descricao.length<5))return mensagem("Informe o nome da atividade e uma descrição com pelo menos 5 caracteres.",true);
     if(recurso!=="Jogos de Tabuleiro"&&(!data||!horario))return mensagem("Selecione data e horário.",true);
     const inicio=recurso==="Jogos de Tabuleiro"?new Date().toISOString().slice(0,19):dataLocal(data,horario);
     const jogos=recurso==="Jogos de Tabuleiro"?selecionados():[];
     if(recurso==="Jogos de Tabuleiro"&&jogos.reduce((s,j)=>s+j.quantidade,0)<2)return mensagem("Selecione no mínimo 2 unidades de jogos por reserva.",true);
-    const fim=recurso==="Jogos de Tabuleiro"?new Date(Date.now()+14*24*60*60*1000).toISOString().slice(0,19):fimUmaHora(inicio);
+    const duracao=recurso==="Quadra"?Math.min(3,Math.max(1,Number($("agendamentoDuracao")?.value||1))):1;
+    const fim=recurso==="Jogos de Tabuleiro"?new Date(Date.now()+14*24*60*60*1000).toISOString().slice(0,19):fimUmaHora(inicio,duracao);
     const button=$("formAgendamento").querySelector('[type="submit"]');button.disabled=true;
     try{
-      const reserva=await api("/agendamentos",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({recurso,inicio,fim,jogos})});
+      const reserva=await api("/agendamentos",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({recurso,inicio,fim,jogos,nome,descricao})});
       mensagem(reserva.status==="aprovado"?"Agendamento confirmado e incluído no calendário!":"Solicitação enviada! Aguarde a autorização da administração.");
       document.dispatchEvent(new CustomEvent("tc-avisos-atualizados"));
       setTimeout(()=>window.bootstrap?.Modal.getInstance($("modalAgendamento"))?.hide(),1100);
@@ -75,11 +78,13 @@
       for(const campo of [$("agendamentoData"),$("agendamentoHorario")]){const grupo=campo?.closest(".mb-3")||campo?.parentElement;if(grupo)grupo.hidden=somenteJogos;}
       $("agendamentoData").required=!somenteJogos;$("agendamentoHorario").required=!somenteJogos;
       $("agendamentoTitulo").textContent=recurso==="Quadra"?"Agendar Quadra":"Reservar Jogos de Tabuleiro";
+      $("tcQuadraCampos").hidden=somenteJogos;$("tcDuracaoGrupo").hidden=somenteJogos;
       const box=$("tcJogosEscolha");box.hidden=recurso!=="Jogos de Tabuleiro";
       const hoje=new Date();$("agendamentoData").min=hoje.getFullYear()+"-"+String(hoje.getMonth()+1).padStart(2,"0")+"-"+String(hoje.getDate()).padStart(2,"0");
       $("agendamentoMsg").textContent="";
       form.reset();
       $("agendamentoTipo").value=recurso;
+      $("tcQuadraCampos").hidden=somenteJogos;$("tcDuracaoGrupo").hidden=somenteJogos;
       if(recurso==="Jogos de Tabuleiro"){
         // Prazo calculado automaticamente quando a administração registra a retirada.
         try{await carregarEstoque();}catch(e){mensagem(e.message,true);}
