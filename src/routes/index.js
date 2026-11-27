@@ -1461,8 +1461,9 @@ r.get("/agendamentos", autenticar, (req,res) => {
   res.json(rows);
 });
 r.get("/agendamentos/calendario", autenticar, (req,res) => {
- const reservas=db.prepare("SELECT a.id,a.recurso,a.inicio,a.fim,a.status,CASE WHEN u.papel='admin' THEN 'Agendado pela Administração' ELSE 'Reservado por Aluno' END AS exibicao,CASE WHEN u.papel='admin' THEN 1 ELSE 0 END AS criado_admin FROM agendamentos a JOIN usuarios u ON u.id=a.usuario_id WHERE a.status IN ('pendente','aprovado') AND a.recurso='Quadra' ORDER BY a.inicio").all();
- const pubs=db.prepare("SELECT id,titulo,descricao,autor_nome,status,'publicacao' AS tipo,'Quadra' AS recurso,titulo AS exibicao,criado_em AS inicio,criado_em AS fim FROM quadra_publicacoes WHERE status='aprovado' AND autorizado_divulgacao=1 ORDER BY criado_em DESC").all().map(p=>({...p,inicio:String(p.inicio).slice(0,10)+'T12:00:00',fim:String(p.fim).slice(0,10)+'T13:00:00'}));
+ const adminUser=req.usuario.papel==="admin";
+ const reservas=db.prepare(`SELECT a.id,a.usuario_id,a.recurso,a.inicio,a.fim,a.status,a.motivo_cancelamento,u.nome AS solicitante,u.email AS email_solicitante FROM agendamentos a JOIN usuarios u ON u.id=a.usuario_id WHERE a.recurso='Quadra' AND a.status IN (${adminUser?"'pendente','aprovado'":"'aprovado'"}) ORDER BY a.inicio`).all();
+ const pubs=db.prepare("SELECT id,titulo,descricao,autor_nome,status,'publicacao' AS tipo,'Quadra' AS recurso,titulo AS exibicao,criado_em AS inicio,criado_em AS fim FROM quadra_publicacoes WHERE status='aprovado' AND autorizado_divulgacao=1 ORDER BY criado_em DESC").all().map(p=>({...p,inicio:String(p.inicio).slice(0,10)+'T12:00:00',fim:String(p.inicio).slice(0,10)+'T13:00:00'}));
  res.json([...reservas,...pubs]);
 });
 r.post("/agendamentos/quadra-publicacoes", autenticar, (req,res) => {
@@ -1550,6 +1551,17 @@ r.patch("/agendamentos/:id/devolucao", autenticar, admin, (req,res) => {
   tx();
   db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)").run(ag.usuario_id,"Devolução registrada",condicao==="integro"?"Seu empréstimo foi devolvido e o estoque atualizado.": "Foi registrada cobrança de reposição no valor de R$ "+(cobranca/100).toFixed(2).replace(".",",")+".");
   res.json({ok:true,cobranca_centavos:cobranca,agendamento:get("agendamentos",id)});
+});
+r.patch("/agendamentos/:id", autenticar, admin, (req,res)=>{
+ const id=positiveId(req.params.id),inicio=clean(req.body.inicio,40),fim=clean(req.body.fim,40),ag=get("agendamentos",id);
+ if(!ag||ag.recurso!=="Quadra")return res.status(404).json({erro:"Reserva da Quadra não encontrada."});
+ if(!["pendente","aprovado"].includes(ag.status))return res.status(409).json({erro:"Somente reservas pendentes ou aprovadas podem ser editadas."});
+ if(!Number.isFinite(Date.parse(inicio))||!Number.isFinite(Date.parse(fim))||Date.parse(inicio)>=Date.parse(fim)||Date.parse(inicio)<Date.now())return bad(res,"Informe uma data e horário válidos no futuro.");
+ const conflito=db.prepare("SELECT id FROM agendamentos WHERE recurso='Quadra' AND id<>? AND status IN ('pendente','aprovado') AND inicio<? AND fim>?").get(id,fim,inicio);
+ if(conflito)return res.status(409).json({erro:"O novo horário conflita com outra reserva."});
+ db.prepare("UPDATE agendamentos SET inicio=?,fim=? WHERE id=?").run(inicio,fim,id);
+ db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)").run(ag.usuario_id,"Reserva da Quadra alterada","A administração alterou sua reserva para "+inicio.replace("T"," ")+" até "+fim.replace("T"," ")+".");
+ res.json({ok:true,agendamento:get("agendamentos",id)});
 });
 r.patch("/agendamentos/:id/status", autenticar, admin, (req,res) => {
   const id=positiveId(req.params.id), novo=req.body.status;
