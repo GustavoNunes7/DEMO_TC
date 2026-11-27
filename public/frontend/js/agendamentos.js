@@ -18,7 +18,7 @@
     if(!form||!body||$("tcJogosEscolha"))return;
     const box=document.createElement("div");
     box.id="tcJogosEscolha";box.className="mt-3";box.hidden=true;
-    box.innerHTML='<label class="form-label fw-bold">Escolha os jogos disponíveis</label><div class="small text-secondary mb-2">Selecione os jogos e a quantidade desejada. A solicitação dependerá da autorização da administração.</div><div id="tcJogosLista" class="d-grid gap-2"></div><label class="form-label fw-bold mt-3" for="tcJogoDevolucao">Data limite para devolução</label><input id="tcJogoDevolucao" type="date" class="form-control bg-dark text-white border-secondary"><div class="small text-secondary mt-1">Combine a data de devolução com a administração.</div>';
+    box.innerHTML='<div class="p-3 rounded-3 border border-secondary bg-black bg-opacity-25 mb-3"><div class="d-flex align-items-center gap-2 mb-1"><i class="bi bi-controller text-danger fs-5"></i><strong>Selecione os jogos</strong></div><p class="small text-secondary mb-0">Marque os jogos desejados e informe a quantidade. A retirada depende da aprovação da administração.</p></div><div id="tcJogosLista" class="row g-2"></div><div class="mt-3 p-3 rounded-3 border border-warning border-opacity-50"><label class="form-label fw-bold" for="tcJogoDevolucao"><i class="bi bi-calendar-check me-1"></i>Devolução em até 14 dias</label><input id="tcJogoDevolucao" type="date" class="form-control bg-dark text-white border-secondary" required><div class="small text-secondary mt-2">O prazo máximo de empréstimo é de duas semanas, contadas a partir da data solicitada para retirada.</div></div>';
     body.insertBefore(box,$("agendamentoMsg"));
   }
   async function carregarEstoque(){
@@ -27,17 +27,17 @@
     lista.replaceChildren();
     if(!estoque.length){const p=document.createElement("p");p.className="small text-warning";p.textContent="O estoque ainda não foi cadastrado pela administração. Peça para o responsável atualizar as quantidades.";lista.append(p);return;}
     estoque.forEach(jogo=>{
-      const row=document.createElement("label");row.className="d-flex align-items-center justify-content-between gap-3 p-2 rounded border border-secondary";
-      const left=document.createElement("span");left.className="d-flex flex-column";
+      const row=document.createElement("label");row.className="col-12 col-md-6";
+      const left=document.createElement("span");left.className="d-flex flex-column flex-grow-1 min-w-0";
       const name=document.createElement("strong");name.textContent=jogo.nome;
       const desc=document.createElement("small");desc.className="text-secondary";desc.textContent=jogo.descricao||"";
       const qty=document.createElement("small");qty.className="text-secondary";qty.textContent=(jogo.quantidade_disponivel??jogo.quantidade_total??0)+" disponível(is)";
       left.append(name,desc,qty);
-      const controls=document.createElement("span");controls.className="d-flex align-items-center gap-2";
+      const controls=document.createElement("span");controls.className="d-flex align-items-center gap-2 ms-2";
       const check=document.createElement("input");check.type="checkbox";check.className="form-check-input m-0";check.dataset.jogoId=jogo.id;check.setAttribute("aria-label","Selecionar "+jogo.nome);
       const amount=document.createElement("input");amount.type="number";amount.min="1";amount.max=String(jogo.quantidade_disponivel??0);amount.value="1";amount.disabled=true;amount.className="form-control form-control-sm bg-dark text-white border-secondary";amount.style.width="76px";amount.dataset.quantidadeJogo=jogo.id;
       check.addEventListener("change",()=>amount.disabled=!check.checked);
-      controls.append(check,amount);row.append(left,controls);lista.append(row);
+      controls.append(check,amount);const card=document.createElement("div");card.className="d-flex align-items-center justify-content-between gap-2 h-100 p-3 rounded-3 border border-secondary bg-dark";card.append(left,controls);row.append(card);lista.append(row);
     });
   }
   function selecionados(){
@@ -56,7 +56,8 @@
     if(recurso==="Jogos de Tabuleiro"&&!jogos.length)return mensagem("Selecione pelo menos um jogo.",true);
     const dataDevolucao=$("tcJogoDevolucao")?.value;
     const fim=recurso==="Jogos de Tabuleiro"?(dataDevolucao?dataDevolucao+"T23:59:00":""):fimUmaHora(inicio);
-    if(recurso==="Jogos de Tabuleiro"&&(!dataDevolucao||Date.parse(fim)<=Date.parse(inicio)))return mensagem("Informe uma data de devolução posterior à retirada.",true);
+    const limiteEmprestimo=new Date(inicio);limiteEmprestimo.setDate(limiteEmprestimo.getDate()+14);
+    if(recurso==="Jogos de Tabuleiro"&&(!dataDevolucao||Date.parse(fim)<=Date.parse(inicio)||Date.parse(dataDevolucao+"T23:59:00")>limiteEmprestimo.getTime()))return mensagem("O empréstimo deve ser devolvido em até 14 dias.",true);
     const button=$("formAgendamento").querySelector('[type="submit"]');button.disabled=true;
     try{
       const reserva=await api("/agendamentos",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({recurso,inicio,fim,jogos})});
@@ -80,13 +81,13 @@
       form.reset();
       $("agendamentoTipo").value=recurso;
       if(recurso==="Jogos de Tabuleiro"){
-        const devolucao=$("tcJogoDevolucao");devolucao.min=$("agendamentoData").value;const amanha=new Date();amanha.setDate(amanha.getDate()+1);devolucao.value=amanha.getFullYear()+"-"+String(amanha.getMonth()+1).padStart(2,"0")+"-"+String(amanha.getDate()).padStart(2,"0");
+        const devolucao=$("tcJogoDevolucao");const retirada=$("agendamentoData").value;const limite=new Date(retirada+"T12:00:00");limite.setDate(limite.getDate()+14);const pad=n=>String(n).padStart(2,"0");devolucao.min=retirada;devolucao.max=limite.getFullYear()+"-"+pad(limite.getMonth()+1)+"-"+pad(limite.getDate());const padrao=new Date(retirada+"T12:00:00");padrao.setDate(padrao.getDate()+14);devolucao.value=padrao.getFullYear()+"-"+pad(padrao.getMonth()+1)+"-"+pad(padrao.getDate());
         try{await carregarEstoque();}catch(e){mensagem(e.message,true);}
       }
       const submit=form.querySelector('[type="submit"]');
       submit.textContent=admin?"Confirmar agendamento":"Solicitar reserva";
     });
-    $("agendamentoData").addEventListener("change",()=>{const campo=$("tcJogoDevolucao");if(campo){campo.min=$("agendamentoData").value;if(campo.value<campo.min)campo.value=campo.min;}});
+    $("agendamentoData").addEventListener("change",()=>{const campo=$("tcJogoDevolucao");if(campo){const retirada=$("agendamentoData").value;const limite=new Date(retirada+"T12:00:00");limite.setDate(limite.getDate()+14);const pad=n=>String(n).padStart(2,"0");campo.min=retirada;campo.max=limite.getFullYear()+"-"+pad(limite.getMonth()+1)+"-"+pad(limite.getDate());if(campo.value<campo.min||campo.value>campo.max)campo.value=campo.max;}});
     form.addEventListener("submit",enviarReserva);
   }
   function montarPainelAdmin(){
@@ -141,9 +142,9 @@
         const card=document.createElement("div");card.className="border border-secondary rounded p-3";
         const start=new Date(String(r.inicio).replace(" ","T")),end=new Date(String(r.fim).replace(" ","T"));
         const title=document.createElement("strong");title.textContent=r.recurso+" · "+start.toLocaleDateString("pt-BR")+" · "+start.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+"–"+end.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
-        const who=document.createElement("p");who.className="small text-secondary mb-2";who.textContent="Aluno: "+(r.solicitante||"—")+" · "+(r.jogos||"Quadra");card.append(title,who);
+        const who=document.createElement("p");who.className="small text-secondary mb-2";who.textContent="Aluno responsável: "+(r.solicitante||"Não identificado");card.append(title,who);if(r.recurso==="Jogos de Tabuleiro"){const games=document.createElement("p");games.className="small mb-1";games.textContent="Jogos: "+(r.jogos||"Não informado");const due=document.createElement("p");due.className="small mb-2";due.textContent="Prazo para devolução: "+end.toLocaleDateString("pt-BR")+" · Limite: 14 dias";card.append(games,due);if(r.retirado_em){const pickup=document.createElement("p");pickup.className="small text-secondary mb-2";pickup.textContent="Retirada registrada em: "+new Date(String(r.retirado_em).replace(" ","T")).toLocaleString("pt-BR");card.append(pickup);}}
         if(r.recurso==="Jogos de Tabuleiro"&&r.status==="aprovado"){
-          const state=document.createElement("p");state.className="small mb-2 "+(r.atrasado?"text-danger":"text-secondary");state.textContent=r.atrasado?"EM ATRASO — prazo de devolução passou":(r.retirado_em?"Aguardando devolução":"Aguardando retirada");card.append(state);
+          const state=document.createElement("p");state.className="small mb-2 "+(r.atrasado?"text-danger":"text-secondary");state.textContent=r.atrasado?"EM ATRASO — prazo de devolução passou":(r.retirado_em?"EMPRESTADO — aguardando devolução":"Aprovado — aguardando retirada do aluno");card.append(state);
           const actions=document.createElement("div");actions.className="d-flex flex-wrap gap-2";
           if(!r.retirado_em){const b=document.createElement("button");b.className="btn btn-sm btn-outline-info";b.textContent="Registrar retirada";b.onclick=()=>acaoEmprestimo(r.id,"retirada");actions.append(b);}
           [["integro","Devolvido íntegro"],["danificado","Danificado"],["perdido","Perdido"]].forEach(([cond,label])=>{const b=document.createElement("button");b.className="btn btn-sm btn-outline-success";b.textContent=label;b.onclick=()=>devolverJogo(r.id,cond);actions.append(b);});
