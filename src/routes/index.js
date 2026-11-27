@@ -1408,8 +1408,8 @@ r.post("/agendamentos/quadra-publicacoes", autenticar, (req,res) => {
  const titulo=clean(req.body.titulo,120),descricao=clean(req.body.descricao,1500);
  if(titulo.length<3||descricao.length<5)return bad(res,"Informe título e descrição válidos.");
  if(req.body.autorizado_divulgacao!==true)return bad(res,"Autorize a divulgação para todos os alunos.");
- const u=db.prepare("SELECT nome,nome_preferencia FROM usuarios WHERE id=?").get(req.usuario.id);
- const autor=clean(u?.nome_preferencia||u?.nome||"Aluno",100);
+ const u=db.prepare("SELECT nome FROM usuarios WHERE id=?").get(req.usuario.id);
+ const autor=clean(u?.nome||"Aluno",100);
  const info=db.prepare("INSERT INTO quadra_publicacoes(usuario_id,titulo,descricao,autor_nome,autorizado_divulgacao) VALUES(?,?,?, ?,1)").run(req.usuario.id,titulo,descricao,autor);
  notificarAdmins("Nova publicação da Quadra",autor+" enviou "+titulo+" para aprovação.");
  res.status(201).json({ok:true,id:info.lastInsertRowid,mensagem:"Enviado para aprovação da administração."});
