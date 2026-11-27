@@ -1309,7 +1309,10 @@
     <div class="mb-4">
       <h2 class="fw-bold">Meus tokens de retirada</h2>
       <p class="text-secondary">Os tokens são gerados após a confirmação do pagamento e expiram em 15 minutos.</p>
-      <button type="button" class="btn btn-outline-danger" id="atualizarTokens">Atualizar pedidos</button>
+      <div class="d-flex flex-wrap gap-2">
+        <input type="search" id="pesquisaMeusTokens" class="form-control bg-dark text-white border-secondary" style="max-width:360px" placeholder="Pesquisar por pedido, produto ou status" aria-label="Pesquisar meus tokens">
+        <button type="button" class="btn btn-outline-danger" id="atualizarTokens">Atualizar pedidos</button>
+      </div>
     </div>
     <div id="listaTokens" class="row g-3"><p class="text-secondary">Carregando pedidos...</p></div>
     <div id="mensagemTokens" class="small mt-3" role="status"></div>
