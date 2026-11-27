@@ -47,6 +47,8 @@ if (!colunasToken.includes("usado_em")) db.exec("ALTER TABLE tokens_retirada ADD
 // Campo persistente para marcar eventos como ocorridos.
 const colunasAvisos = db.prepare("PRAGMA table_info(avisos)").all().map((c) => c.name);
 if (!colunasAvisos.includes("ocorrido")) db.exec("ALTER TABLE avisos ADD COLUMN ocorrido INTEGER NOT NULL DEFAULT 0 CHECK(ocorrido IN (0,1))");
+const colunasAgendamentos = db.prepare("PRAGMA table_info(agendamentos)").all().map((c) => c.name);
+if (colunasAgendamentos.length && !colunasAgendamentos.includes("motivo_cancelamento")) db.exec("ALTER TABLE agendamentos ADD COLUMN motivo_cancelamento TEXT");
 
 // Caixa de notificações para aluno e administrador.
 db.exec(`
@@ -1551,17 +1553,18 @@ r.patch("/agendamentos/:id/devolucao", autenticar, admin, (req,res) => {
 });
 r.patch("/agendamentos/:id/status", autenticar, admin, (req,res) => {
   const id=positiveId(req.params.id), novo=req.body.status;
+  const motivo=clean(req.body.motivo,500);
   if(!allowed(novo,["aprovado","rejeitado","cancelado"])) return bad(res,"Status inválido.");
   const ag=get("agendamentos",id); if(!ag) return res.sendStatus(404);
+  if(novo==="cancelado"){
+    if(ag.recurso!=="Quadra" || ag.status!=="aprovado") return res.status(409).json({erro:"Somente uma reserva de quadra já aprovada pode ser cancelada pela administração."});
+    if(motivo.length<5) return bad(res,"Informe o motivo do cancelamento (mínimo de 5 caracteres).");
+    db.prepare("UPDATE agendamentos SET status='cancelado',motivo_cancelamento=? WHERE id=?").run(motivo,id);
+    db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)").run(ag.usuario_id,"Reserva da Quadra cancelada",`Sua reserva da Quadra #${id} foi cancelada pela administração. Motivo: ${motivo}`);
+    return res.json(get("agendamentos",id));
+  }
   if(ag.status!=="pendente") return res.status(409).json({erro:"Esta solicitação já foi analisada."});
-  const atualizar=db.transaction(()=>{
-    db.prepare("UPDATE agendamentos SET status=? WHERE id=?").run(novo,id);
-    if(novo==="rejeitado" || novo==="cancelado"){
-      const itens=db.prepare("SELECT jogo_id,quantidade FROM agendamento_jogos WHERE agendamento_id=?").all(id);
-      for(const item of itens) db.prepare("UPDATE estoque_jogos SET quantidade_disponivel=MIN(quantidade_total,quantidade_disponivel+?) WHERE id=?").run(item.quantidade,item.jogo_id);
-    }
-  });
-  atualizar();
+  db.prepare("UPDATE agendamentos SET status=? WHERE id=?").run(novo,id);
   db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)").run(ag.usuario_id,"Atualização do agendamento",`Sua solicitação #${id} foi ${novo}.`);
   res.json(get("agendamentos",id));
 });
