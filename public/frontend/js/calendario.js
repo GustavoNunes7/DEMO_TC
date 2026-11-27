@@ -81,7 +81,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       modal.id="tcReservaCalendarioModal";
       modal.className="modal fade";
       modal.tabIndex=-1;
-      modal.innerHTML='<div class="modal-dialog modal-dialog-centered"><div class="modal-content bg-dark text-white border border-secondary"><div class="modal-header border-secondary"><h5 class="modal-title">Reserva da quadra</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button></div><div class="modal-body"><div id="tcReservaCalendarioInfo"></div></div></div></div>';
+      modal.innerHTML='<div class="modal-dialog modal-dialog-centered"><div class="modal-content bg-dark text-white border border-secondary"><div class="modal-header border-secondary"><h5 class="modal-title">Detalhes da Quadra</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button></div><div class="modal-body"><div id="tcReservaCalendarioInfo"></div><p id="tcReservaCalendarioMsg" class="small mt-3 mb-0" role="status"></p></div><div class="modal-footer border-secondary" id="tcReservaCalendarioAcoes" hidden><button type="button" class="btn btn-outline-secondary" id="tcReservaCancelar">Cancelar publicação</button><button type="button" class="btn btn-danger" id="tcReservaDivulgar">Divulgar</button></div></div></div>';
       document.body.append(modal);
     }
     const info=modal.querySelector("#tcReservaCalendarioInfo");
@@ -95,6 +95,34 @@ document.addEventListener("DOMContentLoaded", async () => {
       ["Informação",reserva.exibicao],["Status",status]
     ];
     linhas.forEach(([label,value])=>{const p=document.createElement("p");p.className="mb-2";const b=document.createElement("strong");b.textContent=label+": ";p.append(b,document.createTextNode(value||"—"));info.append(p);});
+    const actions=modal.querySelector("#tcReservaCalendarioAcoes");
+    const msg=modal.querySelector("#tcReservaCalendarioMsg");
+    if(msg) msg.textContent="";
+    const pending=isAdminSessao && reserva.tipo==="publicacao" && reserva.status==="pendente";
+    if(actions) actions.hidden=!pending;
+    if(pending){
+      const divulgar=modal.querySelector("#tcReservaDivulgar");
+      const cancelar=modal.querySelector("#tcReservaCancelar");
+      const atualizarStatus=async status=>{
+        divulgar.disabled=true; cancelar.disabled=true;
+        try{
+          const response=await fetch("/api/agendamentos/quadra-publicacoes/"+encodeURIComponent(reserva.id)+"/status",{
+            method:"PATCH",
+            headers:{"Content-Type":"application/json",Authorization:"Bearer "+(sessionStorage.getItem("techcampus_token")||"")},
+            body:JSON.stringify({status})
+          });
+          const body=await response.json().catch(()=>({}));
+          if(!response.ok) throw new Error(body.erro||"Não foi possível atualizar a publicação.");
+          window.bootstrap?.Modal.getOrCreateInstance(modal).hide();
+          await carregarAvisosCalendario();
+        }catch(error){
+          if(msg) msg.textContent=error.message||"Erro ao atualizar publicação.";
+          divulgar.disabled=false; cancelar.disabled=false;
+        }
+      };
+      divulgar.onclick=()=>atualizarStatus("aprovado");
+      cancelar.onclick=()=>{if(window.confirm("Cancelar esta publicação da Quadra? O aluno será notificado.")) atualizarStatus("rejeitado");};
+    }
     window.bootstrap?.Modal.getOrCreateInstance(modal).show();
   }
   function renderAgenda() {
@@ -221,24 +249,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderAgenda();
     aplicarFiltro(filtroAtual);
   }
-  // Botão explícito de atualização para evitar depender de cache ou navegação.
-  const publicarQuadraBtn=document.createElement("button");
-  publicarQuadraBtn.type="button";publicarQuadraBtn.className="btn btn-danger btn-sm ms-2";
-  publicarQuadraBtn.textContent="Divulgar jogo na Quadra";
-  (todayButton?.parentElement||calendarMonth?.parentElement)?.append(publicarQuadraBtn);
-  publicarQuadraBtn.addEventListener("click",()=>{
-    let modal=document.getElementById("tcPublicarQuadraModal");
-    if(!modal){
-      modal=document.createElement("div");modal.className="modal fade";modal.id="tcPublicarQuadraModal";modal.tabIndex=-1;
-      modal.innerHTML='<div class="modal-dialog"><div class="modal-content bg-dark text-white"><div class="modal-header"><h5>Divulgar jogo na Quadra</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><form id="tcPublicarQuadraForm"><div class="modal-body"><label class="form-label">Título</label><input id="tcPublicarQuadraTitulo" class="form-control mb-3" maxlength="120" required><label class="form-label">Descrição</label><textarea id="tcPublicarQuadraDescricao" class="form-control mb-3" rows="4" maxlength="1500" required></textarea><div class="form-check"><input id="tcPublicarQuadraConsentimento" class="form-check-input" type="checkbox" required><label class="form-check-label">Autorizo divulgar para todos os alunos após aprovação do administrador.</label></div><p id="tcPublicarQuadraMsg" class="small mt-2"></p></div><div class="modal-footer"><button class="btn btn-danger" type="submit">Enviar para aprovação</button></div></form></div></div>';
-      document.body.append(modal);
-      modal.querySelector("form").addEventListener("submit",async e=>{
-        e.preventDefault();const button=e.submitter,msg=modal.querySelector("#tcPublicarQuadraMsg");button.disabled=true;
-        try{const token=sessionStorage.getItem("techcampus_token")||"";const response=await fetch("/api/agendamentos/quadra-publicacoes",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token},body:JSON.stringify({titulo:modal.querySelector("#tcPublicarQuadraTitulo").value,descricao:modal.querySelector("#tcPublicarQuadraDescricao").value,autorizado_divulgacao:modal.querySelector("#tcPublicarQuadraConsentimento").checked})});const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.erro||"Falha ao enviar.");msg.textContent=body.mensagem||"Enviado para aprovação.";e.target.reset();}catch(error){msg.textContent=error.message;}finally{button.disabled=false;}
-      });
-    }
-    window.bootstrap?.Modal.getOrCreateInstance(modal).show();
-  });
   const refreshButton = document.createElement("button");
   refreshButton.type = "button";
   refreshButton.className = "btn btn-outline-secondary btn-sm ms-2";
