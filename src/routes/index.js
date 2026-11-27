@@ -1369,6 +1369,18 @@ r.post("/agendamentos/estoque", autenticar, admin, (req,res) => {
   const info=db.prepare("INSERT INTO estoque_jogos(nome,descricao,quantidade_total,quantidade_disponivel,valor_reposicao_centavos) VALUES(?,?,?,?,?)").run(nome,descricao,quantidade,quantidade,valor);
   res.status(201).json(get("estoque_jogos",info.lastInsertRowid));
 });
+r.post("/agendamentos/estoque/:id/baixa", autenticar, admin, (req,res) => {
+  const id=positiveId(req.params.id), quantidade=Number(req.body.quantidade), motivo=clean(req.body.motivo,30);
+  const jogo=db.prepare("SELECT * FROM estoque_jogos WHERE id=? AND ativo=1").get(id);
+  if(!jogo) return res.status(404).json({erro:"Jogo não encontrado."});
+  if(!Number.isInteger(quantidade)||quantidade<1||quantidade>500||!allowed(motivo,["danificado","perdido"])) return bad(res,"Informe quantidade e motivo válidos.");
+  if(quantidade>jogo.quantidade_disponivel) return res.status(409).json({erro:"A quantidade supera as unidades disponíveis. Confira os empréstimos em andamento."});
+  db.transaction(()=>{
+    db.prepare("UPDATE estoque_jogos SET quantidade_total=quantidade_total-?,quantidade_disponivel=quantidade_disponivel-? WHERE id=?").run(quantidade,quantidade,id);
+    if(jogo.quantidade_total===quantidade) db.prepare("UPDATE estoque_jogos SET ativo=0 WHERE id=?").run(id);
+  })();
+  res.json({ok:true,mensagem:"Baixa registrada: "+motivo+"."});
+});
 r.get("/agendamentos", autenticar, (req,res) => {
   const adminUser=req.usuario.papel==="admin";
   const rows=adminUser
