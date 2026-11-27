@@ -1504,6 +1504,7 @@
           <li class="nav-item"><button type="button" class="nav-link" id="tabGTok">Tokens IoT</button></li>
           <li class="nav-item"><button type="button" class="nav-link" id="tabGAvisos">Avisos</button></li>
           <li class="nav-item"><button type="button" class="nav-link" id="tabGFin">Financeiro + Estoque</button></li>
+          <li class="nav-item"><button type="button" class="nav-link" id="tabGJogos">Estoque de Jogos</button></li>
         </ul>
         <div id="gProdutos">
           <div class="d-flex flex-wrap gap-2 mb-3">
@@ -1555,6 +1556,32 @@
           <div id="gAvisoLista"></div>
         </div>
 
+        <div id="gJogosEstoque" hidden>
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <div><h4 class="mb-1">Estoque dos Jogos de Tabuleiro</h4><p class="text-secondary small mb-0">Controle de unidades para empréstimo. Compras adicionam unidades; danos e perdas registram baixa.</p></div>
+            <button type="button" class="btn btn-outline-light" id="gJogosAtualizar">Atualizar estoque</button>
+          </div>
+          <form id="gJogosCompraForm" class="border border-secondary rounded-3 p-3 mb-3">
+            <h5 class="mb-3">Adicionar jogo / registrar compra</h5><div class="row g-2">
+              <div class="col-md-4"><label class="form-label" for="gJogoNome">Nome do jogo</label><input id="gJogoNome" class="form-control bg-dark text-white border-secondary" maxlength="100" placeholder="Ex.: Xadrez" required></div>
+              <div class="col-md-4"><label class="form-label" for="gJogoDescricao">Descrição</label><input id="gJogoDescricao" class="form-control bg-dark text-white border-secondary" maxlength="300"></div>
+              <div class="col-md-2"><label class="form-label" for="gJogoQuantidade">Unidades compradas</label><input id="gJogoQuantidade" type="number" min="1" max="500" value="1" class="form-control bg-dark text-white border-secondary" required></div>
+              <div class="col-md-2"><label class="form-label" for="gJogoReposicao">Reposição (R$)</label><input id="gJogoReposicao" type="number" min="0" step="0.01" value="0" class="form-control bg-dark text-white border-secondary"></div>
+              <div class="col-12"><button class="btn btn-danger" type="submit">Registrar compra e adicionar ao estoque</button></div>
+              <div class="col-12"><div id="gJogosCompraMsg" class="small" role="status"></div></div>
+            </div>
+          </form>
+          <form id="gJogosBaixaForm" class="border border-secondary rounded-3 p-3 mb-4">
+            <h5 class="mb-3">Remover unidade danificada ou perdida</h5><div class="row g-2">
+              <div class="col-md-5"><label class="form-label" for="gJogoBaixaId">Jogo</label><select id="gJogoBaixaId" class="form-select bg-dark text-white border-secondary" required></select></div>
+              <div class="col-md-2"><label class="form-label" for="gJogoBaixaQtd">Quantidade</label><input id="gJogoBaixaQtd" type="number" min="1" max="500" value="1" class="form-control bg-dark text-white border-secondary" required></div>
+              <div class="col-md-3"><label class="form-label" for="gJogoBaixaMotivo">Motivo</label><select id="gJogoBaixaMotivo" class="form-select bg-dark text-white border-secondary"><option value="danificado">Danificado</option><option value="perdido">Perdido</option></select></div>
+              <div class="col-md-2 d-flex align-items-end"><button class="btn btn-outline-danger w-100" type="submit">Registrar baixa</button></div>
+              <div class="col-12"><div id="gJogosBaixaMsg" class="small" role="status"></div></div>
+            </div>
+          </form>
+          <div id="gJogosTabela"></div>
+        </div>
         <div id="gFinanceiro" class="tc-finance" hidden>
           <style>
             /* TechCampus Financeiro — tema escuro como padrão */
@@ -1770,6 +1797,10 @@
     $("tabGTok").onclick = () => aba("tokens");
     $("tabGAvisos").onclick = () => aba("avisos");
     $("tabGFin").onclick = () => aba("financeiro");
+    $("tabGJogos").onclick = () => aba("jogos");
+    $("gJogosCompraForm").addEventListener("submit", registrarCompraJogos);
+    $("gJogosBaixaForm").addEventListener("submit", registrarBaixaJogos);
+    $("gJogosAtualizar").onclick = carregarEstoqueJogos;
     $("gFinMes").value = new Date().toISOString().slice(0,7);
     $("gEstoqueData").value = new Date().toISOString().slice(0,10);
     $("gFinData").value = new Date().toISOString().slice(0,10);
@@ -1856,17 +1887,56 @@
     $("tabGTok").classList.toggle("active", qual === "tokens");
     $("tabGAvisos").classList.toggle("active", qual === "avisos");
     $("tabGFin").classList.toggle("active", qual === "financeiro");
+    $("tabGJogos").classList.toggle("active", qual === "jogos");
     $("gProdutos").hidden = qual !== "prod";
     $("gPedidos").hidden = qual !== "ped";
     $("gTokens").hidden = qual !== "tokens";
     $("gAvisos").hidden = qual !== "avisos";
     $("gFinanceiro").hidden = qual !== "financeiro";
+    $("gJogosEstoque").hidden = qual !== "jogos";
     if (qual === "financeiro") carregarFinanceiroAdmin();
+    if (qual === "jogos") carregarEstoqueJogos();
     if (qual === "ped") carregarPedidosAdmin();
     if (qual === "tokens") carregarTokensAdmin();
     if (qual === "avisos") carregarAvisosAdmin();
   }
 
+
+  async function carregarEstoqueJogos() {
+    const alvo=$("gJogosTabela"); if(!alvo)return;
+    alvo.replaceChildren(h("p",{class:"text-secondary"},"Carregando estoque..."));
+    try {
+      const jogos=await api("/agendamentos/estoque"), sel=$("gJogoBaixaId");
+      sel.replaceChildren(...jogos.map(j=>h("option",{value:j.id},j.nome+" (disponíveis: "+j.quantidade_disponivel+")")));
+      if(!jogos.length)sel.append(h("option",{value:""},"Nenhum jogo cadastrado"));
+      const linhas=jogos.map(j=>h("tr",{},h("td",{},j.nome),h("td",{},j.descricao||"—"),h("td",{},String(j.quantidade_total)),h("td",{},String(j.quantidade_disponivel)),h("td",{},valorReal(j.valor_reposicao_centavos)),h("td",{},Number(j.quantidade_disponivel)>0?"Disponível":"Sem unidades")));
+      alvo.replaceChildren(tabela(["Jogo","Descrição","Total","Disponíveis","Reposição","Situação"],h("tbody",{},linhas)));
+    } catch(e) { alvo.replaceChildren(h("div",{class:"alert alert-danger"},e.message)); }
+  }
+  async function registrarCompraJogos(event) {
+    event.preventDefault(); const btn=event.submitter; if(btn)btn.disabled=true;
+    const msg=$("gJogosCompraMsg"); msg.textContent="Registrando compra...";
+    try {
+      const nome=$("gJogoNome").value.trim(), descricao=$("gJogoDescricao").value.trim();
+      const quantidade=Number($("gJogoQuantidade").value), valor=Math.round(Number($("gJogoReposicao").value||0)*100);
+      if(!nome||!Number.isInteger(quantidade)||quantidade<1||quantidade>500||!Number.isSafeInteger(valor)||valor<0)throw Error("Confira nome, quantidade e valor de reposição.");
+      await api("/agendamentos/estoque",{method:"POST",body:JSON.stringify({nome,descricao,quantidade,valor_reposicao_centavos:valor})});
+      msg.textContent="Compra registrada e unidades adicionadas ao estoque.";
+      $("gJogoNome").value=""; $("gJogoDescricao").value=""; $("gJogoQuantidade").value="1";
+      await carregarEstoqueJogos();
+    } catch(e) { msg.textContent=e.message; } finally { if(btn)btn.disabled=false; }
+  }
+  async function registrarBaixaJogos(event) {
+    event.preventDefault(); const btn=event.submitter; if(btn)btn.disabled=true;
+    const msg=$("gJogosBaixaMsg"); msg.textContent="Registrando baixa...";
+    try {
+      const id=$("gJogoBaixaId").value, quantidade=Number($("gJogoBaixaQtd").value), motivo=$("gJogoBaixaMotivo").value;
+      if(!id||!Number.isInteger(quantidade)||quantidade<1)throw Error("Selecione um jogo e uma quantidade válida.");
+      await api("/agendamentos/estoque/"+id+"/baixa",{method:"POST",body:JSON.stringify({quantidade,motivo})});
+      msg.textContent="Baixa registrada. O estoque foi atualizado.";
+      $("gJogoBaixaQtd").value="1"; await carregarEstoqueJogos();
+    } catch(e) { msg.textContent=e.message; } finally { if(btn)btn.disabled=false; }
+  }
 
   function valorReal(centavos) { return brl(Number(centavos || 0)); }
 
