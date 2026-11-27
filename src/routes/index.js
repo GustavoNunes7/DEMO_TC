@@ -49,6 +49,8 @@ const colunasAvisos = db.prepare("PRAGMA table_info(avisos)").all().map((c) => c
 if (!colunasAvisos.includes("ocorrido")) db.exec("ALTER TABLE avisos ADD COLUMN ocorrido INTEGER NOT NULL DEFAULT 0 CHECK(ocorrido IN (0,1))");
 const colunasAgendamentos = db.prepare("PRAGMA table_info(agendamentos)").all().map((c) => c.name);
 if (colunasAgendamentos.length && !colunasAgendamentos.includes("motivo_cancelamento")) db.exec("ALTER TABLE agendamentos ADD COLUMN motivo_cancelamento TEXT");
+if (colunasAgendamentos.length && !colunasAgendamentos.includes("titulo")) db.exec("ALTER TABLE agendamentos ADD COLUMN titulo TEXT");
+if (colunasAgendamentos.length && !colunasAgendamentos.includes("descricao")) db.exec("ALTER TABLE agendamentos ADD COLUMN descricao TEXT");
 
 // Caixa de notificações para aluno e administrador.
 db.exec(`
@@ -1462,7 +1464,7 @@ r.get("/agendamentos", autenticar, (req,res) => {
 });
 r.get("/agendamentos/calendario", autenticar, (req,res) => {
  const adminUser=req.usuario.papel==="admin";
- const reservas=db.prepare(`SELECT a.id,a.usuario_id,a.recurso,a.inicio,a.fim,a.status,a.motivo_cancelamento,u.nome AS solicitante,u.email AS email_solicitante
+ const reservas=db.prepare(`SELECT a.id,a.usuario_id,a.recurso,a.inicio,a.fim,a.status,a.titulo,a.descricao,a.motivo_cancelamento,u.nome AS solicitante,u.email AS email_solicitante
  FROM agendamentos a JOIN usuarios u ON u.id=a.usuario_id
  WHERE a.recurso='Quadra' AND a.status IN (${adminUser?"'pendente','aprovado'":"'aprovado'"})
  AND NOT EXISTS (
@@ -1473,8 +1475,7 @@ r.get("/agendamentos/calendario", autenticar, (req,res) => {
      AND (CASE WHEN anterior.status='pendente' THEN 0 ELSE 1 END)<(CASE WHEN a.status='pendente' THEN 0 ELSE 1 END)
  )
  AND a.id=(SELECT MIN(igual.id) FROM agendamentos igual
-   WHERE igual.recurso='Quadra' AND igual.usuario_id=a.usuario_id
-     AND igual.inicio=a.inicio AND igual.fim=a.fim
+   WHERE igual.recurso='Quadra' AND igual.inicio=a.inicio AND igual.fim=a.fim
      AND igual.status=a.status)
  ORDER BY a.inicio`).all();
  const pubs=db.prepare("SELECT id,titulo,descricao,autor_nome,status,'publicacao' AS tipo,'Quadra' AS recurso,titulo AS exibicao,criado_em AS inicio,criado_em AS fim FROM quadra_publicacoes WHERE status='aprovado' AND autorizado_divulgacao=1 ORDER BY criado_em DESC").all().map(p=>({...p,inicio:String(p.inicio).slice(0,10)+'T12:00:00',fim:String(p.inicio).slice(0,10)+'T13:00:00'}));
@@ -1513,16 +1514,19 @@ function atualizarBloqueioEmprestimos(usuarioId){
 }
 r.post("/agendamentos", autenticar, (req, res) => {
   const recurso=clean(req.body.recurso,120), inicio=clean(req.body.inicio,40), fim=clean(req.body.fim,40);
+  const titulo=clean(req.body.nome,120), descricao=clean(req.body.descricao,1000);
   const agora=new Date();
   const inicioFinal=recurso==="Jogos de Tabuleiro"?agora.toISOString().slice(0,19):inicio;
   const fimFinal=recurso==="Jogos de Tabuleiro"?new Date(agora.getTime()+14*24*60*60*1000).toISOString().slice(0,19):fim;
   if(!allowed(recurso,["Quadra","Jogos de Tabuleiro"]) || !Number.isFinite(Date.parse(inicioFinal)) || !Number.isFinite(Date.parse(fimFinal)) || Date.parse(inicioFinal)>=Date.parse(fimFinal) || Date.parse(inicioFinal)<Date.now()) return bad(res,"Recurso ou período inválido.");
+  if(recurso==="Quadra"&&(titulo.length<3||descricao.length<5))return bad(res,"Informe nome e descrição da atividade.");
+  if(recurso==="Quadra"&&Date.parse(fimFinal)-Date.parse(inicioFinal)>3*60*60*1000)return bad(res,"A reserva da Quadra pode ter no máximo 3 horas.");
   const adminUser=req.usuario.papel==="admin";
   if(!adminUser){
     const bloqueio=atualizarBloqueioEmprestimos(req.usuario.id);
     if(bloqueio) return res.status(403).json({erro:"Você está impedido de reservar jogos e quadra até "+bloqueio+" por atraso anterior."});
   }
-  const ocupado=recurso==="Quadra" ? db.prepare("SELECT id FROM agendamentos WHERE recurso=? AND status IN ('pendente','aprovado') AND inicio<? AND fim>?").get(recurso,fim,inicio) : null;
+  const ocupado=recurso==="Quadra" ? db.prepare("SELECT id FROM agendamentos WHERE recurso=? AND status IN ('pendente','aprovado') AND inicio<? AND fim>?").get(recurso,fimFinal,inicioFinal) : null;
   if(ocupado) return res.status(409).json({erro:"Horário já reservado."});
   const jogos=Array.isArray(req.body.jogos)?req.body.jogos:[];
   if(recurso==="Jogos de Tabuleiro" && jogos.reduce((s,item)=>s+Number(item.quantidade||0),0)<2) return bad(res,"Selecione no mínimo 2 unidades de jogos por reserva.");
@@ -1535,7 +1539,7 @@ r.post("/agendamentos", autenticar, (req, res) => {
       if(!jogo || jogo.quantidade_disponivel<quantidade) throw new Error("Estoque insuficiente para "+(jogo?.nome||"um dos jogos")+".");
     }
     const status=adminUser?"aprovado":"pendente";
-    const info=db.prepare("INSERT INTO agendamentos(usuario_id,recurso,inicio,fim,status) VALUES(?,?,?,?,?)").run(req.usuario.id,recurso,inicioFinal,fimFinal,status);
+    const info=db.prepare("INSERT INTO agendamentos(usuario_id,recurso,inicio,fim,status,titulo,descricao) VALUES(?,?,?,?,?,?,?)").run(req.usuario.id,recurso,inicioFinal,fimFinal,status,recurso==="Quadra"?titulo:null,recurso==="Quadra"?descricao:null);
     for(const item of jogos){
       const jogoId=positiveId(item.jogo_id), quantidade=Number(item.quantidade);
       db.prepare("UPDATE estoque_jogos SET quantidade_disponivel=quantidade_disponivel-? WHERE id=?").run(quantidade,jogoId);
