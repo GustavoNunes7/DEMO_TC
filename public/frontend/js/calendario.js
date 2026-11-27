@@ -174,14 +174,26 @@ document.addEventListener("DOMContentLoaded", async () => {
       event.addEventListener("click",(e)=>{e.stopPropagation();abrirAviso(aviso);});
       events.append(event);
     });
-    reservasQuadra.filter(r=>String(r.inicio||"").slice(0,10)===dateString).forEach(reserva=>{
+    const reservasDoDia=reservasQuadra
+      .filter(r=>String(r.inicio||"").slice(0,10)===dateString)
+      .filter(r=>r.tipo==="publicacao" || ["pendente","aprovado"].includes(r.status));
+    // Uma reserva por faixa de horário: se houver registros duplicados, prioriza a pendente.
+    const reservasUnicas=new Map();
+    reservasDoDia.forEach(r=>{
+      const chave=r.tipo==="publicacao"?"pub:"+r.id:String(r.inicio).slice(0,16)+"|"+String(r.fim).slice(0,16);
+      const anterior=reservasUnicas.get(chave);
+      if(!anterior || (anterior.status!=="pendente" && r.status==="pendente")) reservasUnicas.set(chave,r);
+    });
+    reservasUnicas.forEach(reserva=>{
       const event=document.createElement("button");
       event.type="button";
-      event.className="calendar-event importante tc-reserva-quadra";
-      event.title=reserva.tipo==="publicacao"?"Jogo na Quadra: "+reserva.titulo:"Quadra: "+reserva.exibicao;
+      const pendente=reserva.tipo!=="publicacao" && reserva.status==="pendente";
+      event.className="calendar-event tc-reserva-quadra"+(pendente?" tc-reserva-pendente":"");
+      const pessoa=reserva.solicitante||"Aluno não identificado";
+      event.title=reserva.tipo==="publicacao"?"Jogo na Quadra: "+(reserva.titulo||""):("Quadra · "+pessoa+" · "+(pendente?"Aguardando autorização":"Autorizada"));
       const label=document.createElement("span");
       label.className="calendar-event-title";
-      label.textContent=reserva.tipo==="publicacao"?"Jogo: "+reserva.titulo:"Quadra · "+reserva.exibicao;
+      label.textContent=reserva.tipo==="publicacao"?"Jogo: "+(reserva.titulo||"Publicação"):(pendente?"Quadra · Pendente":"Quadra · "+pessoa);
       event.append(label);
       event.addEventListener("click",e=>{e.stopPropagation();abrirDetalheReserva(reserva);});
       events.append(event);
