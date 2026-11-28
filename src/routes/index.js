@@ -33,8 +33,13 @@ db.exec(`
     criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 `);
-db.prepare("INSERT OR IGNORE INTO ajustes_saldo_financeiro(chave,descricao,valor_centavos) VALUES(?,?,?)")
-  .run("saldo_inicial_demo","Saldo inicial demonstrativo",10000);
+db.prepare(`
+  INSERT INTO ajustes_saldo_financeiro(chave,descricao,valor_centavos)
+  VALUES('saldo_inicial_demo','Saldo inicial demonstrativo',10000)
+  ON CONFLICT(chave) DO UPDATE SET
+    descricao=excluded.descricao,
+    valor_centavos=excluded.valor_centavos
+`).run();
 
 // PAGAMENTOS E CONTROLE FINANCEIRO
 r.use(require("./pagamentos"));
