@@ -509,13 +509,49 @@ r.get("/admin/financeiro/resumo", autenticar, admin, (req, res) => {
     FROM despesas_financeiras d LEFT JOIN produtos pr ON pr.id=d.produto_id
     LEFT JOIN usuarios u ON u.id=d.usuario_id ORDER BY d.data_despesa DESC,d.id DESC LIMIT 30`).all();
   const estoque=db.prepare("SELECT COUNT(*) produtos,COALESCE(SUM(estoque),0) unidades,SUM(CASE WHEN estoque<=3 THEN 1 ELSE 0 END) baixo FROM produtos WHERE ativo=1 AND excluido=0").get();
-  res.json({mes,receita_centavos:receitaMes,despesas_centavos:despesaMes,resultado_centavos:receitaMes-despesaMes,grafico,mais_vendidos:maisVendidos,despesas:ultimasDespesas,estoque});
+  const receitasAcumuladas=Number(db.prepare("SELECT COALESCE(SUM(valor_centavos),0) total FROM pagamentos WHERE status='confirmado'").get().total);
+  const despesasAcumuladas=Number(db.prepare("SELECT COALESCE(SUM(valor_centavos),0) total FROM despesas_financeiras").get().total);
+  const saldoDisponivelCentavos=receitasAcumuladas-despesasAcumuladas;
+  res.json({mes,receita_centavos:receitaMes,despesas_centavos:despesaMes,resultado_centavos:receitaMes-despesaMes,saldo_disponivel_centavos:saldoDisponivelCentavos,grafico,mais_vendidos:maisVendidos,despesas:ultimasDespesas,estoque});
 });
 r.post("/admin/financeiro/despesas", autenticar, admin, (req,res)=>{
   const categoria=clean(req.body.categoria,40),descricao=clean(req.body.descricao,180),valor=Number(req.body.valor_centavos),data=clean(req.body.data_despesa,10);
   if(!categoria||!descricao||!Number.isSafeInteger(valor)||valor<=0||!/^\d{4}-\d{2}-\d{2}$/.test(data)||!Number.isFinite(Date.parse(data+"T12:00:00"))) return bad(res,"Informe categoria, descrição, valor e data válidos.");
   const info=db.prepare("INSERT INTO despesas_financeiras(categoria,descricao,valor_centavos,data_despesa,usuario_id) VALUES(?,?,?,?,?)").run(categoria,descricao,valor,data,req.usuario.id);
   res.status(201).json(db.prepare("SELECT * FROM despesas_financeiras WHERE id=?").get(info.lastInsertRowid));
+});
+r.post("/admin/estoque/compras-jogos", autenticar, admin, (req,res)=>{
+  const nome=clean(req.body.nome,100),descricao=clean(req.body.descricao,300);
+  const quantidade=Number(req.body.quantidade),custo=Number(req.body.custo_unitario_centavos);
+  const data=clean(req.body.data_compra,10),observacao=clean(req.body.observacao,180);
+  if(!nome||!Number.isInteger(quantidade)||quantidade<1||quantidade>500||
+     !Number.isSafeInteger(custo)||custo<1||custo>100000000||
+     !/^\d{4}-\d{2}-\d{2}$/.test(data)||!Number.isFinite(Date.parse(data+"T12:00:00")))
+    return bad(res,"Informe jogo, quantidade, custo unitário e data válidos.");
+  const total=quantidade*custo;
+  if(!Number.isSafeInteger(total)||total<=0)return bad(res,"Valor total da compra inválido.");
+  let jogoId;
+  try{
+    db.transaction(()=>{
+      const receitas=Number(db.prepare("SELECT COALESCE(SUM(valor_centavos),0) total FROM pagamentos WHERE status='confirmado'").get().total);
+      const despesas=Number(db.prepare("SELECT COALESCE(SUM(valor_centavos),0) total FROM despesas_financeiras").get().total);
+      const saldo=receitas-despesas;
+      if(total>saldo)throw new Error("Saldo insuficiente. Disponível: R$ "+(Math.max(0,saldo)/100).toFixed(2).replace(".",",")+". Total da compra: R$ "+(total/100).toFixed(2).replace(".",",")+".");
+      let jogo=db.prepare("SELECT * FROM estoque_jogos WHERE nome=?").get(nome);
+      if(jogo){
+        db.prepare("UPDATE estoque_jogos SET descricao=?,quantidade_total=quantidade_total+?,quantidade_disponivel=quantidade_disponivel+?,valor_reposicao_centavos=?,ativo=1 WHERE id=?")
+          .run(descricao||jogo.descricao,quantidade,quantidade,custo,jogo.id);
+        jogoId=jogo.id;
+      }else{
+        const info=db.prepare("INSERT INTO estoque_jogos(nome,descricao,quantidade_total,quantidade_disponivel,valor_reposicao_centavos) VALUES(?,?,?,?,?)")
+          .run(nome,descricao,quantidade,quantidade,custo);
+        jogoId=Number(info.lastInsertRowid);
+      }
+      db.prepare("INSERT INTO despesas_financeiras(categoria,descricao,valor_centavos,data_despesa,origem,quantidade,usuario_id) VALUES('Jogos',?,?,?,'compra_jogos',?,?)")
+        .run("Compra de jogos: "+nome+(observacao?" · "+observacao:""),total,data,quantidade,req.usuario.id);
+    })();
+  }catch(e){return res.status(400).json({erro:e.message||"Não foi possível registrar a compra."});}
+  res.status(201).json({ok:true,jogo:get("estoque_jogos",jogoId),quantidade,valor_total_centavos:total});
 });
 r.post("/admin/estoque/compras", autenticar, admin, (req,res)=>{
   const produtoId=positiveId(req.body.produto_id),quantidade=Number(req.body.quantidade),custo=Number(req.body.custo_unitario_centavos),data=clean(req.body.data_compra,10),observacao=clean(req.body.observacao,180),produto=get("produtos",produtoId);
