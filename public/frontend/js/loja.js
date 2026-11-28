@@ -1681,7 +1681,7 @@
             <div class="col-12 col-sm-6 col-xl-3"><div class="tc-card tc-kpi" style="--tc-tint:#fff0f0"><div class="tc-kpi-label"><i class="bi bi-arrow-down-right me-1 text-danger"></i>Despesas</div><div class="tc-kpi-value text-danger" id="gFinDespesas">R$ 0,00</div><div class="tc-kpi-note">Despesas registradas no mês</div></div></div>
             <div class="col-12 col-sm-6 col-xl-3"><div class="tc-card tc-kpi" style="--tc-tint:#eaf3ff"><div class="tc-kpi-label"><i class="bi bi-wallet2 me-1 text-primary"></i>Resultado estimado</div><div class="tc-kpi-value" id="gFinResultado">R$ 0,00</div><div class="tc-kpi-note">Receitas menos despesas</div></div></div>
             <div class="col-12 col-sm-6 col-xl-3"><div class="tc-card tc-kpi" style="--tc-tint:#f2edff"><div class="tc-kpi-label"><i class="bi bi-box-seam me-1" style="color:#8065d8"></i>Unidades em estoque</div><div class="tc-kpi-value" id="gFinUnidades">0</div><div class="tc-kpi-note"><span id="gFinEstoqueBaixo">0</span> produtos com estoque baixo</div></div></div>
-            <div class="col-12 col-sm-6 col-xl-3"><div class="tc-card tc-kpi" style="--tc-tint:#e2fbf4"><div class="tc-kpi-label"><i class="bi bi-wallet2 me-1 text-success"></i>Saldo disponível estimado</div><div class="tc-kpi-value text-success" id="gFinSaldoDisponivel">R$ 0,00</div><div class="tc-kpi-note">Receitas confirmadas menos todas as despesas</div></div></div>
+            <div class="col-12 col-sm-6 col-xl-3"><div class="tc-card tc-kpi" style="--tc-tint:#e2fbf4"><div class="tc-kpi-label"><i class="bi bi-wallet2 me-1 text-success"></i>Saldo disponível estimado</div><div class="tc-kpi-value text-success" id="gFinSaldoDisponivel">R$ 0,00</div><div class="tc-kpi-note">Saldo inicial demonstrativo + receitas confirmadas − despesas</div></div></div>
           </div>
           <div class="row g-3 mb-3">
             <div class="col-12 col-xl-7"><div class="tc-card">
@@ -2157,9 +2157,11 @@
       if(!jogosCompra.length)$("gEstoqueJogoNome").append(h("option",{value:""},"Cadastre um jogo primeiro"));
       if(!produtos.length)$("gEstoqueProduto").append(h("option",{value:""},"Cadastre um produto primeiro"));
       await carregarEstoqueJogos();
-      const max=Math.max(1,...dados.grafico.flatMap(x=>[x.receita,x.despesas]));
+      const graficoDados=Array.isArray(dados.grafico)?dados.grafico:[];
+      const max=Math.max(1,...graficoDados.flatMap(x=>[Number(x.receita)||0,Number(x.despesas)||0]));
       const graf=$("gFinGrafico");graf.replaceChildren();
-      for(const item of dados.grafico){
+      if(!graficoDados.length)graf.append(h("p",{class:"small text-secondary"},"Ainda não há movimentações suficientes para montar o gráfico."));
+      for(const item of graficoDados){
         const coluna=h("div",{class:"tc-bar-month"});
         const barras=h("div",{class:"tc-bars"});
         barras.append(h("div",{class:"tc-bar",title:"Receita: "+valorReal(item.receita),style:"height:"+Math.max(2,item.receita/max*155)+"px;background:#0fc5a6"}));
