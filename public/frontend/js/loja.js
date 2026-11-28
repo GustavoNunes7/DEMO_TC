@@ -1500,13 +1500,13 @@
         </div>
         <ul class="nav nav-pills mb-3 gap-2">
           <li class="nav-item"><button type="button" class="nav-link active" id="tabGProd">Produtos</button></li>
+          <li class="nav-item"><button type="button" class="nav-link" id="tabGJogos">Jogos</button></li>
           <li class="nav-item"><button type="button" class="nav-link" id="tabGPed">Pedidos</button></li>
           <li class="nav-item"><button type="button" class="nav-link" id="tabGTok">Tokens IoT</button></li>
           <li class="nav-item"><button type="button" class="nav-link" id="tabGAvisos">Avisos</button></li>
           <li class="nav-item"><button type="button" class="nav-link" id="tabGFin">Financeiro + Estoque</button></li>
         </ul>
         <div id="gProdutos">
-          <div class="nav nav-pills gap-2 mb-3"><button type="button" class="btn btn-sm btn-danger" id="gSubTabProdutos">Produtos</button><button type="button" class="btn btn-sm btn-outline-light" id="gSubTabJogos">Jogos</button></div>
           <section id="gProdutosLista">
           <div class="d-flex flex-wrap gap-2 mb-3">
             <input id="gBusca" class="form-control bg-dark text-white border-secondary" style="max-width:320px" placeholder="Buscar produto ou categoria">
@@ -1515,7 +1515,26 @@
           </div>
           <div id="gProdTabela"></div>
           </section>
-          <section id="gJogosCatalogo" hidden><input id="gJogosBusca" type="search" class="form-control bg-dark text-white border-secondary mb-3" style="max-width:320px" placeholder="Pesquisar jogos"><div id="gJogosCatalogoTabela"></div></section>
+        </div>
+        <div id="gJogos" hidden>
+          <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div><h3 class="fw-bold mb-1"><i class="bi bi-controller text-danger me-2"></i>Gerenciamento de Jogos</h3><p class="small text-secondary mb-0">Controle o catálogo, os empréstimos, as aprovações e os prazos de devolução.</p></div>
+            <button type="button" class="btn btn-outline-light btn-sm" id="gJogosAtualizar"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar painel</button>
+          </div>
+          <div class="row g-3 mb-4">
+            <div class="col-6 col-xl-3"><div class="border border-secondary rounded-3 p-3 h-100"><div class="small text-secondary">Tipos cadastrados</div><strong class="fs-2" id="gJogosKpiTipos">—</strong></div></div>
+            <div class="col-6 col-xl-3"><div class="border border-secondary rounded-3 p-3 h-100"><div class="small text-secondary">Unidades no estoque</div><strong class="fs-2" id="gJogosKpiTotal">—</strong></div></div>
+            <div class="col-6 col-xl-3"><div class="border border-secondary rounded-3 p-3 h-100"><div class="small text-secondary">Em empréstimo</div><strong class="fs-2" id="gJogosKpiAtivos">—</strong></div></div>
+            <div class="col-6 col-xl-3"><div class="border border-secondary rounded-3 p-3 h-100"><div class="small text-secondary">Aguardando aprovação</div><strong class="fs-2" id="gJogosKpiPendentes">—</strong></div></div>
+          </div>
+          <section class="border border-secondary rounded-3 p-3 mb-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"><div><h5 class="fw-bold mb-1">Solicitações e empréstimos</h5><p class="small text-secondary mb-0">Aprove ou recuse pedidos e acompanhe quanto tempo cada jogo está com o aluno.</p></div><input id="gJogosEmprestimosBusca" type="search" class="form-control bg-dark text-white border-secondary" style="max-width:280px" placeholder="Pesquisar aluno ou jogo"></div>
+            <div id="gJogosEmprestimosTabela"><p class="small text-secondary">Carregando empréstimos...</p></div>
+          </section>
+          <section class="border border-secondary rounded-3 p-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"><div><h5 class="fw-bold mb-1">Catálogo e estoque de jogos</h5><p class="small text-secondary mb-0">Consulte quantidade total, disponível e comprometida em empréstimos.</p></div><input id="gJogosBusca" type="search" class="form-control bg-dark text-white border-secondary" style="max-width:280px" placeholder="Pesquisar jogos"></div>
+            <div id="gJogosCatalogoTabela"></div>
+          </section>
         </div>
         <div id="gTokens" hidden>
           <div class="d-flex flex-wrap gap-2 mb-3">
@@ -1821,13 +1840,14 @@
     });
 
     $("tabGProd").onclick = () => aba("prod");
+    $("tabGJogos").onclick = () => aba("jogos");
     $("tabGPed").onclick = () => aba("ped");
     $("tabGTok").onclick = () => aba("tokens");
     $("tabGAvisos").onclick = () => aba("avisos");
     $("tabGFin").onclick = () => aba("financeiro");
-    $("gSubTabProdutos").onclick = () => alternarCatalogo("produtos");
-    $("gSubTabJogos").onclick = () => alternarCatalogo("jogos");
     $("gJogosBusca").addEventListener("input", carregarCatalogoJogos);
+    $("gJogosEmprestimosBusca").addEventListener("input", renderEmprestimosJogos);
+    $("gJogosAtualizar").onclick = carregarGerenciamentoJogos;
     $("gFinMes").value = new Date().toISOString().slice(0,7);
     $("gEstoqueData").value = new Date().toISOString().slice(0,10);
     $("gFinData").value = new Date().toISOString().slice(0,10);
@@ -1910,28 +1930,25 @@
 
   function aba(qual) {
     $("tabGProd").classList.toggle("active", qual === "prod");
+    $("tabGJogos").classList.toggle("active", qual === "jogos");
     $("tabGPed").classList.toggle("active", qual === "ped");
     $("tabGTok").classList.toggle("active", qual === "tokens");
     $("tabGAvisos").classList.toggle("active", qual === "avisos");
     $("tabGFin").classList.toggle("active", qual === "financeiro");
     $("gProdutos").hidden = qual !== "prod";
+    $("gJogos").hidden = qual !== "jogos";
     $("gPedidos").hidden = qual !== "ped";
     $("gTokens").hidden = qual !== "tokens";
     $("gAvisos").hidden = qual !== "avisos";
     $("gFinanceiro").hidden = qual !== "financeiro";
     if (qual === "financeiro") carregarFinanceiroAdmin();
+    if (qual === "jogos") carregarGerenciamentoJogos();
     if (qual === "ped") carregarPedidosAdmin();
     if (qual === "tokens") carregarTokensAdmin();
     if (qual === "avisos") carregarAvisosAdmin();
   }
 
 
-  function alternarCatalogo(tipo) {
-    const jogos=tipo==="jogos";$("gProdutosLista").hidden=jogos;$("gJogosCatalogo").hidden=!jogos;
-    $("gSubTabProdutos").classList.toggle("btn-danger",!jogos);$("gSubTabProdutos").classList.toggle("btn-outline-light",jogos);
-    $("gSubTabJogos").classList.toggle("btn-danger",jogos);$("gSubTabJogos").classList.toggle("btn-outline-light",!jogos);
-    if(jogos)carregarCatalogoJogos();
-  }
   let modalJogoAdmin = null;
   let jogoEmEdicao = null;
 
@@ -1954,6 +1971,70 @@
     $("gJogoEditarMsg").textContent="";
     $("gJogoExcluir").hidden=false;
     modalJogoAdmin.show();
+  }
+  let cacheJogosEstoque=[],cacheJogosEmprestimos=[];
+  const dataAdmin=v=>{if(!v)return null;const d=new Date(String(v).replace(" ","T")+"Z");return Number.isNaN(d.getTime())?null:d;};
+  const dataTextoAdmin=(v,hora=false)=>{const d=dataAdmin(v);return d?d.toLocaleDateString("pt-BR")+(hora?" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"—"):"—";};
+  const diasEmprestimo=v=>{const d=dataAdmin(v);return d?Math.max(0,Math.floor((Date.now()-d.getTime())/86400000)):0;};
+  async function carregarGerenciamentoJogos(){
+    const alvo=$("gJogosEmprestimosTabela");if(!alvo)return;
+    alvo.replaceChildren(h("p",{class:"text-secondary"},"Atualizando gerenciamento de jogos..."));
+    try{
+      const [estoque,emprestimos]=await Promise.all([api("/agendamentos/estoque"),api("/agendamentos")]);
+      cacheJogosEstoque=estoque;cacheJogosEmprestimos=emprestimos.filter(x=>x.recurso==="Jogos de Tabuleiro");
+      $("gJogosKpiTipos").textContent=String(estoque.length);
+      $("gJogosKpiTotal").textContent=String(estoque.reduce((s,x)=>s+Number(x.quantidade_total||0),0));
+      $("gJogosKpiAtivos").textContent=String(cacheJogosEmprestimos.filter(x=>x.status==="aprovado"&&x.retirado_em&&!x.devolvido_em).length);
+      $("gJogosKpiPendentes").textContent=String(cacheJogosEmprestimos.filter(x=>x.status==="pendente").length);
+      await carregarCatalogoJogos();renderEmprestimosJogos();
+    }catch(e){alvo.replaceChildren(h("div",{class:"alert alert-danger"},e.message));}
+  }
+  function renderEmprestimosJogos(){
+    const alvo=$("gJogosEmprestimosTabela");if(!alvo)return;
+    const q=norm($("gJogosEmprestimosBusca")?.value||"");
+    const xs=cacheJogosEmprestimos.filter(x=>norm((x.solicitante||"")+" "+(x.jogos||"")+" "+x.id).includes(q))
+      .sort((a,b)=>(a.status==="pendente"?0:1)-(b.status==="pendente"?0:1)||String(b.criado_em||"").localeCompare(String(a.criado_em||"")));
+    if(!xs.length){alvo.textContent="Nenhuma solicitação ou empréstimo encontrado.";return;}
+    const linhas=xs.map(x=>{
+      const aluno=x.solicitante||("Aluno #"+x.usuario_id),jogo=x.jogos||"Jogo não identificado";
+      let status=x.status==="pendente"?"Aguardando aprovação":x.status==="rejeitado"?"Recusado":x.devolvido_em?"Devolvido":x.retirado_em?(x.atrasado?"Em atraso":"Emprestado"):"Aprovado · aguardando retirada";
+      const estado=h("div",{},h("strong",{},status),h("small",{class:"d-block text-secondary"},x.retirado_em?"Retirado há "+diasEmprestimo(x.retirado_em)+" dia(s)":"Solicitado em "+dataTextoAdmin(x.criado_em,true)));
+      if(x.retirado_em&&!x.devolvido_em)estado.append(h("small",{class:"d-block "+(x.atrasado?"text-danger":"text-secondary")},"Devolver até "+dataTextoAdmin(x.fim)));
+      const acoes=h("div",{class:"d-flex flex-wrap gap-1"});
+      const action=(label,cls,fn)=>{const b=h("button",{type:"button",class:"btn btn-sm "+cls},label);b.addEventListener("click",fn);acoes.append(b);};
+      if(x.status==="pendente"){
+        action("Aprovar","btn-success",()=>alterarStatusEmprestimo(x.id,"aprovado"));
+        action("Recusar","btn-outline-danger",()=>alterarStatusEmprestimo(x.id,"rejeitado"));
+      }else if(x.status==="aprovado"&&!x.retirado_em&&!x.devolvido_em){
+        action("Confirmar entrega","btn-outline-info",()=>registrarRetiradaJogo(x.id));
+      }else if(x.status==="aprovado"&&x.retirado_em&&!x.devolvido_em){
+        action("Confirmar devolução","btn-success",()=>registrarDevolucaoJogo(x.id,"integro"));
+        action("Devolvido danificado","btn-outline-warning",()=>registrarDevolucaoJogo(x.id,"danificado"));
+        action("Jogo perdido","btn-outline-danger",()=>registrarDevolucaoJogo(x.id,"perdido"));
+      }
+      return h("tr",{},h("td",{},h("strong",{},aluno),h("small",{class:"d-block text-secondary"},"Pedido #"+x.id)),h("td",{},jogo),h("td",{},estado),h("td",{},acoes));
+    });
+    alvo.replaceChildren(tabela(["Aluno","Jogo","Situação e prazo","Ações administrativas"],h("tbody",{},linhas)));
+  }
+  async function alterarStatusEmprestimo(id,status){
+    const confirma=status==="aprovado"?"Aprovar a solicitação deste aluno?":"Recusar a solicitação deste aluno?";
+    if(!confirm(confirma))return;
+    try{await api("/agendamentos/"+id+"/status",{method:"PATCH",body:JSON.stringify({status})});await carregarGerenciamentoJogos();}
+    catch(e){alert(e.message);}
+  }
+  async function registrarRetiradaJogo(id){
+    if(!confirm("Confirmar que o jogo foi entregue ao aluno? O prazo de 14 dias começará agora."))return;
+    try{await api("/agendamentos/"+id+"/retirada",{method:"PATCH"});await carregarGerenciamentoJogos();}
+    catch(e){alert(e.message);}
+  }
+  async function registrarDevolucaoJogo(id,condicao){
+    const texto=condicao==="integro"?"Confirmar devolução do jogo em boas condições?":condicao==="danificado"?"Registrar que o jogo foi devolvido danificado?":"Registrar que o jogo não foi devolvido e foi considerado perdido?";
+    if(!confirm(texto))return;
+    try{
+      const r=await api("/agendamentos/"+id+"/devolucao",{method:"PATCH",body:JSON.stringify({condicao})});
+      if(r.cobranca_centavos)alert("Cobrança de reposição: "+valorReal(r.cobranca_centavos));
+      await carregarGerenciamentoJogos();
+    }catch(e){alert(e.message);}
   }
   async function carregarCatalogoJogos(){
     const alvo=$("gJogosCatalogoTabela");if(!alvo)return;
