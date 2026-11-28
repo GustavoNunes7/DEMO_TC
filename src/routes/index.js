@@ -1512,6 +1512,22 @@ function atualizarBloqueioEmprestimos(usuarioId){
   const u=get("usuarios",usuarioId);
   return u?.emprestimos_bloqueado_ate && u.emprestimos_bloqueado_ate>=new Date().toISOString().slice(0,10) ? u.emprestimos_bloqueado_ate : null;
 }
+r.get("/agendamentos/limites", autenticar, (req,res) => {
+  const usados=db.prepare(`
+    SELECT DISTINCT aj.jogo_id
+    FROM agendamento_jogos aj
+    JOIN agendamentos a ON a.id=aj.agendamento_id
+    WHERE a.usuario_id=? AND a.recurso='Jogos de Tabuleiro'
+      AND a.status='aprovado'
+  `).all(req.usuario.id).map(item=>item.jogo_id);
+  const aberto=db.prepare(`
+    SELECT id FROM agendamentos
+    WHERE usuario_id=? AND recurso='Jogos de Tabuleiro'
+      AND (status='pendente' OR (status='aprovado' AND devolvido_em IS NULL))
+    LIMIT 1
+  `).get(req.usuario.id);
+  res.json({jogosDiferentesUtilizados:usados,emprestimoEmAberto:Boolean(aberto)});
+});
 r.post("/agendamentos", autenticar, (req, res) => {
   const recurso=clean(req.body.recurso,120), inicio=clean(req.body.inicio,40), fim=clean(req.body.fim,40);
   const titulo=clean(req.body.nome,120), descricao=clean(req.body.descricao,1000);
@@ -1529,14 +1545,32 @@ r.post("/agendamentos", autenticar, (req, res) => {
   const ocupado=recurso==="Quadra" ? db.prepare("SELECT id FROM agendamentos WHERE recurso=? AND status IN ('pendente','aprovado') AND inicio<? AND fim>?").get(recurso,fimFinal,inicioFinal) : null;
   if(ocupado) return res.status(409).json({erro:"Horário já reservado."});
   const jogos=Array.isArray(req.body.jogos)?req.body.jogos:[];
-  if(recurso==="Jogos de Tabuleiro" && jogos.reduce((s,item)=>s+Number(item.quantidade||0),0)<2) return bad(res,"Selecione no mínimo 2 unidades de jogos por reserva.");
+  if(recurso==="Jogos de Tabuleiro" && (jogos.length!==1 || Number(jogos[0]?.quantidade)!==1))
+    return bad(res,"Cada empréstimo permite somente 1 jogo por vez.");
   if(recurso==="Quadra" && jogos.length) return bad(res,"Não envie jogos para uma reserva de quadra.");
+  if(recurso==="Jogos de Tabuleiro" && !adminUser){
+    const aberto=db.prepare(`
+      SELECT id FROM agendamentos
+      WHERE usuario_id=? AND recurso='Jogos de Tabuleiro'
+        AND (status='pendente' OR (status='aprovado' AND devolvido_em IS NULL))
+      LIMIT 1
+    `).get(req.usuario.id);
+    if(aberto) return res.status(409).json({erro:"Você já possui uma solicitação pendente ou um empréstimo em andamento. Devolva o jogo atual e aguarde a análise antes de solicitar outro."});
+    const usados=db.prepare(`
+      SELECT DISTINCT aj.jogo_id
+      FROM agendamento_jogos aj JOIN agendamentos a ON a.id=aj.agendamento_id
+      WHERE a.usuario_id=? AND a.recurso='Jogos de Tabuleiro' AND a.status='aprovado'
+    `).all(req.usuario.id).map(item=>item.jogo_id);
+    const novoId=positiveId(jogos[0]?.jogo_id);
+    if(!usados.includes(novoId) && usados.length>=2)
+      return res.status(403).json({erro:"Você já utilizou seus 2 tipos diferentes de jogos. Pode solicitar novamente um dos jogos que já utilizou."});
+  }
   const criar=db.transaction(()=>{
     for(const item of jogos){
       const jogoId=positiveId(item.jogo_id), quantidade=Number(item.quantidade);
-      if(!Number.isInteger(quantidade)||quantidade<1) throw new Error("Quantidade de jogos inválida.");
+      if(quantidade!==1) throw new Error("Cada empréstimo permite somente 1 unidade de jogo.");
       const jogo=db.prepare("SELECT * FROM estoque_jogos WHERE id=? AND ativo=1").get(jogoId);
-      if(!jogo || jogo.quantidade_disponivel<quantidade) throw new Error("Estoque insuficiente para "+(jogo?.nome||"um dos jogos")+".");
+      if(!jogo || jogo.quantidade_disponivel<1) throw new Error("Jogo indisponível no estoque: "+(jogo?.nome||"jogo não encontrado")+".");
     }
     const status=adminUser?"aprovado":"pendente";
     const info=db.prepare("INSERT INTO agendamentos(usuario_id,recurso,inicio,fim,status,titulo,descricao) VALUES(?,?,?,?,?,?,?)").run(req.usuario.id,recurso,inicioFinal,fimFinal,status,recurso==="Quadra"?titulo:null,recurso==="Quadra"?descricao:null);
@@ -1549,12 +1583,26 @@ r.post("/agendamentos", autenticar, (req, res) => {
   });
   let id;
   try{id=criar();}catch(error){return res.status(409).json({erro:error.message});}
-  if(!adminUser) notificarAdmins("Nova solicitação de agendamento",`Solicitação #${id} para ${recurso} aguardando autorização.`);
+  if(!adminUser) {
+    if(recurso==="Jogos de Tabuleiro") {
+      const jogo=db.prepare("SELECT e.nome FROM agendamento_jogos aj JOIN estoque_jogos e ON e.id=aj.jogo_id WHERE aj.agendamento_id=?").get(id);
+      notificarAdmins("Nova solicitação de jogos",`Solicitação #${id}: aluno #${req.usuario.id} pediu ${jogo?.nome||"um jogo"}. Acesse Pedidos > Solicitações de Jogos para aprovar ou recusar.`);
+    } else {
+      notificarAdmins("Nova solicitação de agendamento",`Solicitação #${id} para ${recurso} aguardando autorização.`);
+    }
+  }
   res.status(201).json(get("agendamentos",id));
 });
 r.patch("/agendamentos/:id/retirada", autenticar, admin, (req,res) => {
   const ag=get("agendamentos",positiveId(req.params.id));
-  if(!ag || ag.recurso!=="Jogos de Tabuleiro" || ag.status!=="aprovado" || ag.retirado_em) return res.status(409).json({erro:"Empréstimo não está pronto para retirada."});
+  if(!ag || ag.recurso!=="Jogos de Tabuleiro" || ag.status!=="aprovado" || ag.retirado_em || ag.devolvido_em) return res.status(409).json({erro:"Empréstimo não está pronto para retirada."});
+  const outro=db.prepare(`
+    SELECT id FROM agendamentos
+    WHERE usuario_id=? AND recurso='Jogos de Tabuleiro' AND id<>?
+      AND status='aprovado' AND retirado_em IS NOT NULL AND devolvido_em IS NULL
+    LIMIT 1
+  `).get(ag.usuario_id,ag.id);
+  if(outro) return res.status(409).json({erro:"Este aluno já possui outro jogo retirado e ainda não devolvido."});
   db.prepare("UPDATE agendamentos SET retirado_em=CURRENT_TIMESTAMP, inicio=CURRENT_TIMESTAMP, fim=datetime(CURRENT_TIMESTAMP, '+14 days') WHERE id=?").run(ag.id);
   res.json(get("agendamentos",ag.id));
 });
@@ -1603,8 +1651,34 @@ r.patch("/agendamentos/:id/status", autenticar, admin, (req,res) => {
     return res.json(get("agendamentos",id));
   }
   if(ag.status!=="pendente") return res.status(409).json({erro:"Esta solicitação já foi analisada."});
-  db.prepare("UPDATE agendamentos SET status=? WHERE id=?").run(novo,id);
-  db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)").run(ag.usuario_id,"Atualização do agendamento",`Sua solicitação #${id} foi ${novo}.`);
+  if(ag.recurso==="Jogos de Tabuleiro" && novo==="aprovado"){
+    const outro=db.prepare(`
+      SELECT id FROM agendamentos
+      WHERE usuario_id=? AND recurso='Jogos de Tabuleiro' AND id<>?
+        AND (status='pendente' OR (status='aprovado' AND devolvido_em IS NULL))
+      LIMIT 1
+    `).get(ag.usuario_id,id);
+    if(outro) return res.status(409).json({erro:"O aluno já possui outra solicitação pendente ou empréstimo em andamento."});
+    const usados=db.prepare(`
+      SELECT DISTINCT aj.jogo_id FROM agendamento_jogos aj
+      JOIN agendamentos a ON a.id=aj.agendamento_id
+      WHERE a.usuario_id=? AND a.recurso='Jogos de Tabuleiro' AND a.status='aprovado'
+    `).all(ag.usuario_id).map(item=>item.jogo_id);
+    const solicitado=db.prepare("SELECT jogo_id FROM agendamento_jogos WHERE agendamento_id=?").get(id)?.jogo_id;
+    if(solicitado && !usados.includes(solicitado) && usados.length>=2)
+      return res.status(409).json({erro:"O aluno já atingiu o limite de 2 tipos diferentes de jogos."});
+  }
+  db.transaction(()=>{
+    db.prepare("UPDATE agendamentos SET status=? WHERE id=?").run(novo,id);
+    if(novo==="rejeitado" && ag.recurso==="Jogos de Tabuleiro"){
+      const itens=db.prepare("SELECT jogo_id,quantidade FROM agendamento_jogos WHERE agendamento_id=?").all(id);
+      for(const item of itens) db.prepare("UPDATE estoque_jogos SET quantidade_disponivel=MIN(quantidade_total,quantidade_disponivel+?) WHERE id=?").run(item.quantidade,item.jogo_id);
+    }
+  })();
+  const ehJogo=ag.recurso==="Jogos de Tabuleiro";
+  db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)")
+    .run(ag.usuario_id,ehJogo?(novo==="aprovado"?"Solicitação de jogo aprovada":"Solicitação de jogo recusada"):"Atualização do agendamento",
+      ehJogo?(novo==="aprovado"?`Sua solicitação de jogo #${id} foi aprovada. Aguarde a liberação para retirada pela administração.`:`Sua solicitação de jogo #${id} foi recusada. O estoque foi liberado novamente.`):`Sua solicitação #${id} foi ${novo}.`);
   res.json(get("agendamentos",id));
 });
 // Ajuda / chamados
