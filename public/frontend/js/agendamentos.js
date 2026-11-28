@@ -18,13 +18,22 @@
     if(!form||!body||$("tcJogosEscolha"))return;
     const box=document.createElement("div");
     box.id="tcJogosEscolha";box.className="mt-3";box.hidden=true;
-    box.innerHTML='<div class="p-3 rounded-3 border border-secondary bg-black bg-opacity-25 mb-3"><div class="d-flex align-items-center gap-2 mb-1"><i class="bi bi-controller text-danger fs-5"></i><strong>Selecione os jogos</strong></div><p class="small text-secondary mb-0">Marque os jogos desejados e informe a quantidade. A retirada depende da aprovação da administração.</p></div><div id="tcJogosLista" class="row g-2"></div><div class="mt-3 p-3 rounded-3 border border-warning border-opacity-50"><div class="fw-bold"><i class="bi bi-calendar-check me-1"></i>Prazo de empréstimo: 14 dias</div><div class="small text-secondary mt-2">A contagem começa automaticamente quando a administração registra a retirada. Não é necessário informar a data de devolução.</div></div>';
+    box.innerHTML='<div class="p-3 rounded-3 border border-secondary bg-black bg-opacity-25 mb-3"><div class="d-flex align-items-center gap-2 mb-1"><i class="bi bi-controller text-danger fs-5"></i><strong>Escolha um jogo</strong></div><p class="small text-secondary mb-0">Cada empréstimo permite 1 jogo por vez. Você pode utilizar até 2 tipos diferentes de jogos. Para solicitar outro, devolva primeiro o jogo atual.</p></div><div id="tcJogosLista" class="row g-2"></div><div id="tcJogosLimiteMsg" class="small mt-2 text-secondary"></div><div class="mt-3 p-3 rounded-3 border border-warning border-opacity-50"><div class="fw-bold"><i class="bi bi-calendar-check me-1"></i>Prazo de empréstimo: 14 dias</div><div class="small text-secondary mt-2">A contagem começa quando a administração registra a retirada. A solicitação precisa ser aprovada antes da retirada.</div></div>';
     body.insertBefore(box,$("agendamentoMsg"));
   }
   async function carregarEstoque(){
-    estoque=await api("/agendamentos/estoque");
+    const [catalogo,limites]=await Promise.all([api("/agendamentos/estoque"),api("/agendamentos/limites")]);
+    estoque=catalogo;
     const lista=$("tcJogosLista");if(!lista)return;
     lista.replaceChildren();
+    const limiteMsg=$("tcJogosLimiteMsg");
+    if(limiteMsg){
+      limiteMsg.textContent=limites.emprestimoEmAberto
+        ?"Você já possui uma solicitação pendente ou um empréstimo em andamento. Aguarde a devolução para pedir outro jogo."
+        :(limites.jogosDiferentesUtilizados?.length>=2
+          ?"Você já utilizou seus 2 tipos de jogos. Pode solicitar novamente um desses jogos."
+          :"Você ainda pode escolher até "+(2-(limites.jogosDiferentesUtilizados?.length||0))+" tipo(s) diferente(s) de jogo.");
+    }
     if(!estoque.length){const p=document.createElement("p");p.className="small text-warning";p.textContent="O estoque ainda não foi cadastrado pela administração. Peça para o responsável atualizar as quantidades.";lista.append(p);return;}
     estoque.forEach(jogo=>{
       const row=document.createElement("label");row.className="col-12 col-md-6";
@@ -35,13 +44,15 @@
       left.append(name,desc,qty);
       const controls=document.createElement("span");controls.className="d-flex align-items-center gap-2 ms-2";
       const check=document.createElement("input");check.type="checkbox";check.className="form-check-input m-0";check.dataset.jogoId=jogo.id;check.setAttribute("aria-label","Selecionar "+jogo.nome);
-      const amount=document.createElement("input");amount.type="number";amount.min="1";amount.max=String(jogo.quantidade_disponivel??0);amount.value="1";amount.disabled=true;amount.className="form-control form-control-sm bg-dark text-white border-secondary";amount.style.width="76px";amount.dataset.quantidadeJogo=jogo.id;
-      check.addEventListener("change",()=>amount.disabled=!check.checked);
+      const amount=document.createElement("span");amount.className="small text-secondary";amount.textContent="1 unidade";
+      check.addEventListener("change",()=>{
+        if(check.checked) lista.querySelectorAll('input[data-jogo-id]').forEach(other=>{if(other!==check)other.checked=false;});
+      });
       controls.append(check,amount);const card=document.createElement("div");card.className="d-flex align-items-center justify-content-between gap-2 h-100 p-3 rounded-3 border border-secondary bg-dark";card.append(left,controls);row.append(card);lista.append(row);
     });
   }
   function selecionados(){
-    return [...document.querySelectorAll("#tcJogosLista input[data-jogo-id]:checked")].map(check=>({jogo_id:Number(check.dataset.jogoId),quantidade:Number(document.querySelector('[data-quantidade-jogo="'+check.dataset.jogoId+'"]').value)}));
+    return [...document.querySelectorAll("#tcJogosLista input[data-jogo-id]:checked")].map(check=>({jogo_id:Number(check.dataset.jogoId),quantidade:1}));
   }
   function dataLocal(data,hora){return data+"T"+hora+":00";}
   function fimUmaHora(inicio,horas=1){const d=new Date(inicio);d.setHours(d.getHours()+horas);const pad=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes())+":00";}
@@ -55,7 +66,7 @@
     if(recurso!=="Jogos de Tabuleiro"&&(!data||!horario))return mensagem("Selecione data e horário.",true);
     const inicio=recurso==="Jogos de Tabuleiro"?new Date().toISOString().slice(0,19):dataLocal(data,horario);
     const jogos=recurso==="Jogos de Tabuleiro"?selecionados():[];
-    if(recurso==="Jogos de Tabuleiro"&&jogos.reduce((s,j)=>s+j.quantidade,0)<2)return mensagem("Selecione no mínimo 2 unidades de jogos por reserva.",true);
+    if(recurso==="Jogos de Tabuleiro"&&jogos.length!==1)return mensagem("Selecione somente 1 jogo por empréstimo.",true);
     const duracao=recurso==="Quadra"?Math.min(3,Math.max(1,Number($("agendamentoDuracao")?.value||1))):1;
     const fim=recurso==="Jogos de Tabuleiro"?new Date(Date.now()+14*24*60*60*1000).toISOString().slice(0,19):fimUmaHora(inicio,duracao);
     const button=$("formAgendamento").querySelector('[type="submit"]');button.disabled=true;
@@ -98,7 +109,7 @@
   function montarPainelAdmin(){
     const section=$("pedidos");if(!section||$("tcAdminAgendamentos"))return;
     const box=document.createElement("section");box.id="tcAdminAgendamentos";box.className="mt-5 p-3 p-lg-4 rounded-3 border border-secondary bg-dark text-white";
-    box.innerHTML='<div class="d-flex justify-content-between flex-wrap gap-2 align-items-center mb-3"><div><span class="text-danger small fw-bold text-uppercase">Administração</span><h3 class="fw-bold mb-1">Gestão de agendamentos</h3><p class="text-secondary small mb-0">Autorize reservas da quadra e controle os jogos disponíveis para empréstimo.</p></div><button class="btn btn-outline-secondary btn-sm" id="tcAtualizarAgendamentos" type="button"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar</button></div><div class="mb-3"><h5 class="fw-bold">Publicações da Quadra para aprovação</h5><div id="tcPublicacoesQuadraAdmin" class="d-grid gap-2"><p class="small text-secondary">Carregando...</p></div></div><div class="row g-3"><div class="col-12 col-xl-5"><div class="p-3 rounded border border-secondary h-100"><h5 class="fw-bold">Estoque de jogos</h5><form id="tcFormEstoque" class="d-grid gap-2"><input class="form-control bg-dark text-white border-secondary" id="tcJogoNome" maxlength="100" placeholder="Nome do jogo (ex.: Xadrez)" required><input class="form-control bg-dark text-white border-secondary" id="tcJogoDescricao" maxlength="300" placeholder="Descrição (opcional)"><label class="small" for="tcJogoQtd">Quantidade comprada/adicionada</label><input class="form-control bg-dark text-white border-secondary" id="tcJogoQtd" type="number" min="0" max="500" value="1" required><label class="small" for="tcJogoValor">Valor de reposição por unidade (R$)</label><input class="form-control bg-dark text-white border-secondary" id="tcJogoValor" type="number" min="0" step="0.01" value="0" required><button class="btn btn-danger" type="submit">Adicionar ao estoque</button><p class="small text-secondary mb-0">Atraso não gera multa diária. O valor é cobrado somente em caso de dano ou perda.</p></form><div id="tcEstoqueAdminLista" class="d-grid gap-2 mt-3"></div><p id="tcEstoqueMsg" class="small mt-2 mb-0"></p></div></div><div class="col-12 col-xl-7"><div class="p-3 rounded border border-secondary h-100"><h5 class="fw-bold">Solicitações pendentes</h5><div id="tcReservasAdminLista" class="d-grid gap-2"><p class="small text-secondary">Carregando...</p></div></div></div></div>';
+    box.innerHTML='<div class="d-flex justify-content-between flex-wrap gap-2 align-items-center mb-3"><div><span class="text-danger small fw-bold text-uppercase">Administração</span><h3 class="fw-bold mb-1">Gestão de agendamentos</h3><p class="text-secondary small mb-0">Aprove empréstimos de jogos em uma área própria e gerencie as reservas da quadra separadamente.</p></div><button class="btn btn-outline-secondary btn-sm" id="tcAtualizarAgendamentos" type="button"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar</button></div><div class="mb-3"><h5 class="fw-bold">Publicações da Quadra para aprovação</h5><div id="tcPublicacoesQuadraAdmin" class="d-grid gap-2"><p class="small text-secondary">Carregando...</p></div></div><div class="mb-4 p-3 rounded border border-danger border-opacity-50" id="tcAdminSolicitacoesJogos"><div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><div><h4 class="fw-bold mb-1"><i class="bi bi-controller me-2 text-danger"></i>Solicitações de Jogos</h4><p class="small text-secondary mb-0">Confira o aluno, o jogo solicitado e aprove ou recuse cada pedido.</p></div><span class="badge text-bg-danger">Aprovação necessária</span></div><div id="tcSolicitacoesJogosAdminLista" class="d-grid gap-2 mt-3"><p class="small text-secondary">Carregando...</p></div></div><div class="row g-3"><div class="col-12 col-xl-5"><div class="p-3 rounded border border-secondary h-100"><h5 class="fw-bold">Estoque de jogos</h5><form id="tcFormEstoque" class="d-grid gap-2"><input class="form-control bg-dark text-white border-secondary" id="tcJogoNome" maxlength="100" placeholder="Nome do jogo (ex.: Xadrez)" required><input class="form-control bg-dark text-white border-secondary" id="tcJogoDescricao" maxlength="300" placeholder="Descrição (opcional)"><label class="small" for="tcJogoQtd">Quantidade comprada/adicionada</label><input class="form-control bg-dark text-white border-secondary" id="tcJogoQtd" type="number" min="0" max="500" value="1" required><label class="small" for="tcJogoValor">Valor de reposição por unidade (R$)</label><input class="form-control bg-dark text-white border-secondary" id="tcJogoValor" type="number" min="0" step="0.01" value="0" required><button class="btn btn-danger" type="submit">Adicionar ao estoque</button><p class="small text-secondary mb-0">Atraso não gera multa diária. O valor é cobrado somente em caso de dano ou perda.</p></form><div id="tcEstoqueAdminLista" class="d-grid gap-2 mt-3"></div><p id="tcEstoqueMsg" class="small mt-2 mb-0"></p></div></div><div class="col-12 col-xl-7"><div class="p-3 rounded border border-secondary h-100"><h5 class="fw-bold">Reservas da Quadra</h5><div id="tcReservasAdminLista" class="d-grid gap-2"><p class="small text-secondary">Carregando...</p></div></div></div></div>';
     const cards=section.querySelector(".row.g-4.justify-content-center");
     (cards||section.firstElementChild)?.after(box);
     $("tcAtualizarAgendamentos").addEventListener("click",carregarPainelAdmin);
@@ -140,28 +151,45 @@
         const count=document.createElement("strong");count.textContent=j.quantidade_disponivel+" / "+j.quantidade_total;
         row.append(name,count);stock.append(row);
       });
-      const list=$("tcReservasAdminLista");list.replaceChildren();
-      const abertas=reservas.filter(r=>r.status==="pendente"||(r.recurso==="Jogos de Tabuleiro"&&r.status==="aprovado"&&!r.devolvido_em)||(r.recurso==="Quadra"&&r.status==="aprovado"));
-      if(!abertas.length){const p=document.createElement("p");p.className="small text-secondary";p.textContent="Nenhuma solicitação ou empréstimo em aberto.";list.append(p);}
-      abertas.forEach(r=>{
+      const gameList=$("tcSolicitacoesJogosAdminLista");gameList.replaceChildren();
+      const gameLoans=reservas.filter(r=>r.recurso==="Jogos de Tabuleiro"&&(r.status==="pendente"||(r.status==="aprovado"&&!r.devolvido_em)));
+      if(!gameLoans.length){const p=document.createElement("p");p.className="small text-secondary";p.textContent="Nenhuma solicitação ou empréstimo de jogo em aberto.";gameList.append(p);}
+      gameLoans.forEach(r=>{
         const card=document.createElement("div");card.className="border border-secondary rounded p-3";
-        const start=new Date(String(r.inicio).replace(" ","T")),end=new Date(String(r.fim).replace(" ","T"));
-        const title=document.createElement("strong");title.textContent=r.recurso+" · "+start.toLocaleDateString("pt-BR")+" · "+start.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+"–"+end.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
-        const who=document.createElement("p");who.className="small text-secondary mb-2";who.textContent="Aluno responsável: "+(r.solicitante||"Não identificado");card.append(title,who);if(r.recurso==="Jogos de Tabuleiro"){const games=document.createElement("p");games.className="small mb-1";games.textContent="Jogos: "+(r.jogos||"Não informado");const due=document.createElement("p");due.className="small mb-2";due.textContent="Devolução até: "+end.toLocaleDateString("pt-BR")+" · Prazo de 14 dias";card.append(games,due);if(r.retirado_em){const pickup=document.createElement("p");pickup.className="small text-secondary mb-2";pickup.textContent="Retirado em: "+new Date(String(r.retirado_em).replace(" ","T")).toLocaleString("pt-BR");card.append(pickup);}}
-        if(r.recurso==="Jogos de Tabuleiro"&&r.status==="aprovado"){
-          const state=document.createElement("p");state.className="small mb-2 "+(r.atrasado?"text-danger":"text-secondary");state.textContent=r.atrasado?"EM ATRASO — prazo de devolução passou":(r.retirado_em?"EMPRESTADO — prazo de 14 dias em andamento":"Aprovado — aguardando retirada do aluno");card.append(state);
+        const title=document.createElement("strong");title.textContent="Solicitação #"+r.id+" · Jogos de Tabuleiro";
+        const who=document.createElement("p");who.className="small text-secondary mb-1";who.textContent="Aluno responsável: "+(r.solicitante||"Não identificado");
+        const games=document.createElement("p");games.className="small mb-2";games.textContent="Jogo solicitado: "+(r.jogos||"Não informado");
+        card.append(title,who,games);
+        if(r.status==="pendente"){
+          const state=document.createElement("p");state.className="small text-warning mb-2";state.textContent="Aguardando aprovação da administração.";card.append(state);
+          const actions=document.createElement("div");actions.className="d-flex gap-2";
+          [["aprovado","Aprovar solicitação","btn-success"],["rejeitado","Recusar solicitação","btn-outline-danger"]].forEach(([status,label,cls])=>{
+            const b=document.createElement("button");b.type="button";b.className="btn btn-sm "+cls;b.textContent=label;b.onclick=()=>decidirReserva(r.id,status);actions.append(b);
+          });
+          card.append(actions);
+        }else{
+          const end=new Date(String(r.fim).replace(" ","T"));
+          const state=document.createElement("p");state.className="small mb-2 "+(r.atrasado?"text-danger":"text-success");
+          state.textContent=r.retirado_em?(r.atrasado?"EM ATRASO — prazo de devolução passou":"EMPRESTADO — devolução até "+end.toLocaleDateString("pt-BR")):"Aprovado — aguardando retirada do aluno";
+          card.append(state);
+          if(r.retirado_em){const pickup=document.createElement("p");pickup.className="small text-secondary mb-2";pickup.textContent="Retirado em: "+new Date(String(r.retirado_em).replace(" ","T")).toLocaleString("pt-BR");card.append(pickup);}
           const actions=document.createElement("div");actions.className="d-flex flex-wrap gap-2";
           if(!r.retirado_em){const b=document.createElement("button");b.className="btn btn-sm btn-outline-info";b.textContent="Registrar retirada";b.onclick=()=>acaoEmprestimo(r.id,"retirada");actions.append(b);}
-          [["integro","Devolvido íntegro"],["danificado","Danificado"],["perdido","Perdido"]].forEach(([cond,label])=>{const b=document.createElement("button");b.className="btn btn-sm btn-outline-success";b.textContent=label;b.onclick=()=>devolverJogo(r.id,cond);actions.append(b);});
+          [["integro","Registrar devolução"],["danificado","Devolvido danificado"],["perdido","Jogo perdido"]].forEach(([cond,label])=>{const b=document.createElement("button");b.className="btn btn-sm btn-outline-success";b.textContent=label;b.onclick=()=>devolverJogo(r.id,cond);if(!r.retirado_em)b.disabled=true;actions.append(b);});
           card.append(actions);
-        }else if(r.recurso==="Quadra"&&r.status==="aprovado"){
-          const state=document.createElement("p");state.className="small text-success mb-2";state.textContent="Reserva confirmada no calendário.";card.append(state);
-          const cancel=document.createElement("button");cancel.type="button";cancel.className="btn btn-sm btn-outline-danger";cancel.textContent="Cancelar reserva";
-          cancel.onclick=()=>cancelarReservaQuadra(r.id);card.append(cancel);
-        }else if(r.status==="pendente"){
-          const actions=document.createElement("div");actions.className="d-flex gap-2";
-          [["aprovado","Autorizar","btn-success"],["rejeitado","Recusar","btn-outline-danger"]].forEach(([status,label,cls])=>{const b=document.createElement("button");b.type="button";b.className="btn btn-sm "+cls;b.textContent=label;b.onclick=()=>decidirReserva(r.id,status);actions.append(b);});card.append(actions);
         }
+        gameList.append(card);
+      });
+      const list=$("tcReservasAdminLista");list.replaceChildren();
+      const courtReservations=reservas.filter(r=>r.recurso==="Quadra"&&(r.status==="pendente"||r.status==="aprovado"));
+      if(!courtReservations.length){const p=document.createElement("p");p.className="small text-secondary";p.textContent="Nenhuma reserva da Quadra em aberto.";list.append(p);}
+      courtReservations.forEach(r=>{
+        const card=document.createElement("div");card.className="border border-secondary rounded p-3";
+        const start=new Date(String(r.inicio).replace(" ","T")),end=new Date(String(r.fim).replace(" ","T"));
+        const title=document.createElement("strong");title.textContent="Quadra · "+start.toLocaleDateString("pt-BR")+" · "+start.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+"–"+end.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+        const who=document.createElement("p");who.className="small text-secondary mb-2";who.textContent="Aluno responsável: "+(r.solicitante||"Não identificado");card.append(title,who);
+        if(r.status==="aprovado"){const state=document.createElement("p");state.className="small text-success mb-2";state.textContent="Reserva confirmada no calendário.";card.append(state);const cancel=document.createElement("button");cancel.type="button";cancel.className="btn btn-sm btn-outline-danger";cancel.textContent="Cancelar reserva";cancel.onclick=()=>cancelarReservaQuadra(r.id);card.append(cancel);}
+        else{const actions=document.createElement("div");actions.className="d-flex gap-2";[["aprovado","Autorizar","btn-success"],["rejeitado","Recusar","btn-outline-danger"]].forEach(([status,label,cls])=>{const b=document.createElement("button");b.type="button";b.className="btn btn-sm "+cls;b.textContent=label;b.onclick=()=>decidirReserva(r.id,status);actions.append(b);});card.append(actions);}
         list.append(card);
       });
     }catch(e){$("tcReservasAdminLista").textContent=e.message;}
