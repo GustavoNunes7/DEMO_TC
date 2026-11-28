@@ -101,6 +101,12 @@ function notificarAdmins(titulo, mensagem) {
   const tx = db.transaction(() => admins.forEach((u) => inserir.run(u.id, titulo, mensagem)));
   tx();
 }
+function notificarAlunosAtivos(titulo,mensagem) {
+  const alunos=db.prepare("SELECT u.id FROM usuarios u LEFT JOIN preferencias_privacidade p ON p.usuario_id=u.id WHERE u.papel='aluno' AND u.ativo=1 AND COALESCE(p.notificacoes_sistema,1)=1").all();
+  const inserir=db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)");
+  const tx=db.transaction(()=>alunos.forEach(u=>inserir.run(u.id,titulo,mensagem)));
+  tx();
+}
 
 const loginLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -1445,11 +1451,14 @@ r.put("/formatura/destinos/:id",autenticar,admin,(req,res)=>fotoUpload.single("f
  const imagem=req.file?"/api/formatura/destinos/imagem/"+req.file.filename:(clean(req.body.imagem_url,500)||old.imagem_url);
  db.prepare("UPDATE formatura_destinos SET tipo=?,nome=?,endereco=?,descricao=?,imagem_url=?,site_url=?,data_passeio=?,atualizado_em=CURRENT_TIMESTAMP WHERE id=?").run(d.tipo,d.nome,d.endereco,d.descricao,imagem,d.site,d.data,id);
  if(req.file&&old.imagem_url.startsWith("/api/formatura/destinos/imagem/")){const f=path.join(uploadDir,path.basename(old.imagem_url));if(fs.existsSync(f))fs.unlinkSync(f);}
- res.json(get("formatura_destinos",id));
+ const atualizado=get("formatura_destinos",id);
+ notificarAlunosAtivos("Passeio atualizado", `O passeio "${old.nome}" foi alterado pela Administração. Confira as informações atualizadas na Temporada de Formatura: "${atualizado.nome}".`);
+ res.json(atualizado);
 }));
 r.delete("/formatura/destinos/:id",autenticar,admin,(req,res)=>{
  const id=positiveId(req.params.id),old=id&&get("formatura_destinos",id);if(!old)return res.status(404).json({erro:"Destino não encontrado."});
  db.prepare("UPDATE formatura_destinos SET publicado=0,atualizado_em=CURRENT_TIMESTAMP WHERE id=?").run(id);
+ notificarAlunosAtivos("Passeio removido", `O passeio "${old.nome}" foi excluído pela Administração e não está mais disponível na Temporada de Formatura.`);
  if(old.imagem_url.startsWith("/api/formatura/destinos/imagem/")){const f=path.join(uploadDir,path.basename(old.imagem_url));if(fs.existsSync(f))fs.unlinkSync(f);}
  res.status(204).end();
 });
