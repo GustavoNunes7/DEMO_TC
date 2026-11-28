@@ -573,7 +573,7 @@ r.post("/admin/estoque/compras-jogos", autenticar, admin, (req,res)=>{
           .run(nome,descricao,quantidade,quantidade,custo);
         jogoId=Number(info.lastInsertRowid);
       }
-      db.prepare("INSERT INTO despesas_financeiras(categoria,descricao,valor_centavos,data_despesa,origem,quantidade,usuario_id) VALUES('Jogos',?,?,?,'compra_jogos',?,?)")
+      db.prepare("INSERT INTO despesas_financeiras(categoria,descricao,valor_centavos,data_despesa,origem,quantidade,usuario_id) VALUES('Jogos',?,?,?,'compra_estoque',?,?)")
         .run("Compra de jogos: "+nome+(observacao?" · "+observacao:""),total,data,quantidade,req.usuario.id);
     })();
   }catch(e){return res.status(400).json({erro:e.message||"Não foi possível registrar a compra."});}
