@@ -62,10 +62,11 @@
   function destinoNotificacao(item) {
     const conteudo = (item.titulo || "") + " " + (item.mensagem || "");
     const t = conteudo.toLocaleLowerCase("pt-BR");
+    if (/solicitação de jogos|solicitacao de jogos|jogos de tabuleiro/.test(t)) return "#pedidos";
     if (/documento|comprovante/.test(t)) return "#documento";
     if (/pedido|pagamento|token|retirada|compra/.test(t)) return "#pedidos";
     if (/aviso|evento|temporada|formatura/.test(t)) return "#avisos";
-    if (/agendamento|quadra|jogos/.test(t)) return "#avisos";
+    if (/agendamento|quadra|jogos/.test(t)) return "#pedidos";
     if (/dúvida|duvida|chamado|resposta da aapm/.test(t)) return "#ajuda";
     if (/usuário|usuario|aluno|conta/.test(t)) return "#usuarios";
     return "#inicio";
@@ -82,6 +83,9 @@
       } else {
         window.location.hash = destino;
       }
+    }
+    if (destino === "#pedidos" && /Solicitação de jogos|Nova solicitação de jogos/i.test(window.__tcNotificacaoAtual || "")) {
+      window.setTimeout(() => document.getElementById("tcAdminSolicitacoesJogos")?.scrollIntoView({behavior:"smooth",block:"start"}), 250);
     }
     if (window.bootstrap?.Dropdown) {
       const instancia = window.bootstrap.Dropdown.getInstance(botao);
@@ -136,6 +140,7 @@
             if (Number(item.lida) === 0) {
               await requisicao("/api/notificacoes/" + encodeURIComponent(item.id) + "/lida", { method: "PATCH" });
             }
+            window.__tcNotificacaoAtual=(item.titulo||"")+" "+(item.mensagem||"");
             navegarPara(destinoNotificacao(item));
             await carregar();
           } catch (erro) {
