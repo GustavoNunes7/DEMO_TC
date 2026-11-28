@@ -1370,6 +1370,55 @@ r.delete("/avisos/:id", autenticar, admin, (req, res) => {
   res.status(204).end();
 });
 
+// Destinos e próximo passeio da Temporada de Formatura.
+db.exec(`CREATE TABLE IF NOT EXISTS formatura_destinos (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ tipo TEXT NOT NULL DEFAULT 'destino' CHECK(tipo IN ('destino','proximo')),
+ nome TEXT NOT NULL, endereco TEXT NOT NULL DEFAULT '', descricao TEXT NOT NULL DEFAULT '',
+ imagem_url TEXT NOT NULL DEFAULT '', site_url TEXT NOT NULL DEFAULT '',
+ data_passeio TEXT, publicado INTEGER NOT NULL DEFAULT 1,
+ criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, atualizado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);`);
+const destinosIniciais=[
+['destino','Thermas Water Park','Rodovia SP-304, Km 189 - São Pedro - SP','Um dos principais parques aquáticos da região, com diversas atrações para aproveitar um dia completo de diversão.','../landing/images/thermasPark.jpg','https://www.thermas.com.br/'],
+['destino','Sítio Paraíso Verde','Mairiporã - SP','Um espaço cercado pela natureza, ideal para momentos de lazer, descanso e integração entre os alunos.','../landing/images/sitioParaisoVerde.jpg',''],
+['destino','Hopi Hari','Rodovia dos Bandeirantes, Km 72 - Vinhedo - SP','Um dos maiores parques temáticos do Brasil, com atrações, brinquedos e espaços para diversão durante todo o dia.','../landing/images/hopihari.jpg','https://www.hopihari.com.br/'],
+['destino','Sítio Recanto Feliz','Atibaia - SP','Um espaço de lazer e contato com a natureza, pensado para proporcionar um dia agradável de confraternização.','../landing/images/sitioRecantoFeliz.jpg','']
+];
+if(!db.prepare("SELECT COUNT(*) total FROM formatura_destinos").get().total){
+ const ins=db.prepare("INSERT INTO formatura_destinos(tipo,nome,endereco,descricao,imagem_url,site_url) VALUES(?,?,?,?,?,?)");
+ db.transaction(()=>destinosIniciais.forEach(x=>ins.run(...x)))();
+}
+r.get("/formatura/destinos",(_req,res)=>res.json(db.prepare("SELECT * FROM formatura_destinos WHERE publicado=1 ORDER BY CASE tipo WHEN 'proximo' THEN 0 ELSE 1 END,id DESC").all()));
+const validarDestino=body=>{
+ const tipo=body.tipo==="proximo"?"proximo":"destino",nome=clean(body.nome,150),endereco=clean(body.endereco,300),descricao=clean(body.descricao,3000),site=clean(body.site_url,500),data=clean(body.data_passeio,10);
+ if(!nome||!endereco||!descricao||(site&&!/^https?:\/\//i.test(site))||(tipo==="proximo"&&data&&!/^\d{4}-\d{2}-\d{2}$/.test(data)))return null;
+ return {tipo,nome,endereco,descricao,site,data:tipo==="proximo"&&data?data:null};
+};
+r.post("/formatura/destinos",autenticar,admin,(req,res)=>fotoUpload.single("foto")(req,res,err=>{
+ if(err)return bad(res,"Envie uma imagem JPG ou PNG de até 20 MB.");
+ const d=validarDestino(req.body);if(!d)return bad(res,"Confira os campos obrigatórios.");
+ const imagem=req.file?"uploads/"+req.file.filename:clean(req.body.imagem_url,500);
+ if(!imagem)return bad(res,"Envie uma foto do local.");
+ const info=db.prepare("INSERT INTO formatura_destinos(tipo,nome,endereco,descricao,imagem_url,site_url,data_passeio) VALUES(?,?,?,?,?,?,?)").run(d.tipo,d.nome,d.endereco,d.descricao,imagem,d.site,d.data);
+ res.status(201).json(get("formatura_destinos",info.lastInsertRowid));
+}));
+r.put("/formatura/destinos/:id",autenticar,admin,(req,res)=>fotoUpload.single("foto")(req,res,err=>{
+ if(err)return bad(res,"Envie uma imagem JPG ou PNG de até 20 MB.");
+ const id=positiveId(req.params.id),old=id&&get("formatura_destinos",id);if(!old||!old.publicado)return res.status(404).json({erro:"Destino não encontrado."});
+ const d=validarDestino(req.body);if(!d)return bad(res,"Confira os campos obrigatórios.");
+ const imagem=req.file?"uploads/"+req.file.filename:(clean(req.body.imagem_url,500)||old.imagem_url);
+ db.prepare("UPDATE formatura_destinos SET tipo=?,nome=?,endereco=?,descricao=?,imagem_url=?,site_url=?,data_passeio=?,atualizado_em=CURRENT_TIMESTAMP WHERE id=?").run(d.tipo,d.nome,d.endereco,d.descricao,imagem,d.site,d.data,id);
+ if(req.file&&old.imagem_url.startsWith("uploads/")){const f=path.join(uploadDir,path.basename(old.imagem_url));if(fs.existsSync(f))fs.unlinkSync(f);}
+ res.json(get("formatura_destinos",id));
+}));
+r.delete("/formatura/destinos/:id",autenticar,admin,(req,res)=>{
+ const id=positiveId(req.params.id),old=id&&get("formatura_destinos",id);if(!old)return res.status(404).json({erro:"Destino não encontrado."});
+ db.prepare("UPDATE formatura_destinos SET publicado=0,atualizado_em=CURRENT_TIMESTAMP WHERE id=?").run(id);
+ if(old.imagem_url.startsWith("uploads/")){const f=path.join(uploadDir,path.basename(old.imagem_url));if(fs.existsSync(f))fs.unlinkSync(f);}
+ res.status(204).end();
+});
+
 // Conteúdo informativo de formatura.
 r.get("/formatura", (_req, res) => res.json(db.prepare("SELECT * FROM formatura WHERE publicado=1 ORDER BY id DESC").all()));
 r.post("/formatura", autenticar, admin, (req, res) => {
