@@ -1868,5 +1868,5 @@ r.patch("/chamados/:id", autenticar, admin, (req, res) => {
 r.use(require("./senha"));
 
 // ROTA 404
-r.use((_req, res) => res.status(404).json({ erro: "Rota não encontrada." }));
+r.use((req, res) => { console.warn(`[API 404] ${req.method} ${req.originalUrl}`); return res.status(404).json({ erro: "Rota não encontrada.", caminho: req.originalUrl, metodo: req.method }); });
 module.exports = r;
