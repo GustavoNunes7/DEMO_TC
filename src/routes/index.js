@@ -1300,15 +1300,13 @@ r.patch("/documentos/:id/visualizado", autenticar, admin, (req, res) => {
 r.patch("/documentos/:id/status", autenticar, admin, (req, res) => {
   const d = get("documentos", positiveId(req.params.id));
   if (!d) return res.sendStatus(404);
-  if (!allowed(req.body.status, ["pendente", "aprovado", "rejeitado"]))
-    return bad(res);
-  db.prepare("UPDATE documentos SET status=?,observacao=? WHERE id=?").run(
-    req.body.status,
-    clean(req.body.observacao, 1000),
-    d.id,
-  );
+  if (d.status !== "pendente") return res.status(409).json({ erro: "Este documento já foi analisado." });
+  if (!allowed(req.body.status, ["aprovado", "rejeitado"])) return bad(res, "Decisão inválida.");
+  const observacao = clean(req.body.observacao, 1000);
+  if (req.body.status === "rejeitado" && !observacao) return bad(res, "Informe o motivo da rejeição.");
+  db.prepare("UPDATE documentos SET status=?,observacao=? WHERE id=? AND status='pendente'").run(req.body.status, observacao, d.id);
   db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)")
-    .run(d.usuario_id, "Atualização de documento", `O documento "${d.nome}" foi ${req.body.status}. ${clean(req.body.observacao, 500)}`.trim());
+    .run(d.usuario_id, "Atualização de documento", `O documento "${d.nome}" foi ${req.body.status}.${observacao ? " Motivo/observação: " + observacao : ""}`);
   res.json(get("documentos", d.id));
 });
 // Avisos: publicados são públicos; gerenciamento exige autenticação administrativa.
