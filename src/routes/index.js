@@ -1390,6 +1390,12 @@ if(!db.prepare("SELECT COUNT(*) total FROM formatura_destinos").get().total){
  db.transaction(()=>destinosIniciais.forEach(x=>ins.run(...x)))();
 }
 r.get("/formatura/destinos",(_req,res)=>res.json(db.prepare("SELECT * FROM formatura_destinos WHERE publicado=1 ORDER BY CASE tipo WHEN 'proximo' THEN 0 ELSE 1 END,id DESC").all()));
+r.get("/formatura/destinos/imagem/:arquivo",(req,res)=>{
+ const arquivo=path.basename(req.params.arquivo);
+ const existe=db.prepare("SELECT 1 FROM formatura_destinos WHERE imagem_url=? AND publicado=1").get("/api/formatura/destinos/imagem/"+arquivo);
+ if(!existe)return res.status(404).end();
+ res.sendFile(path.join(uploadDir,arquivo));
+});
 const validarDestino=body=>{
  const tipo=body.tipo==="proximo"?"proximo":"destino",nome=clean(body.nome,150),endereco=clean(body.endereco,300),descricao=clean(body.descricao,3000),site=clean(body.site_url,500),data=clean(body.data_passeio,10);
  if(!nome||!endereco||!descricao||(site&&!/^https?:\/\//i.test(site))||(tipo==="proximo"&&data&&!/^\d{4}-\d{2}-\d{2}$/.test(data)))return null;
@@ -1398,7 +1404,7 @@ const validarDestino=body=>{
 r.post("/formatura/destinos",autenticar,admin,(req,res)=>fotoUpload.single("foto")(req,res,err=>{
  if(err)return bad(res,"Envie uma imagem JPG ou PNG de até 20 MB.");
  const d=validarDestino(req.body);if(!d)return bad(res,"Confira os campos obrigatórios.");
- const imagem=req.file?"uploads/"+req.file.filename:clean(req.body.imagem_url,500);
+ const imagem=req.file?"/api/formatura/destinos/imagem/"+req.file.filename:clean(req.body.imagem_url,500);
  if(!imagem)return bad(res,"Envie uma foto do local.");
  const info=db.prepare("INSERT INTO formatura_destinos(tipo,nome,endereco,descricao,imagem_url,site_url,data_passeio) VALUES(?,?,?,?,?,?,?)").run(d.tipo,d.nome,d.endereco,d.descricao,imagem,d.site,d.data);
  res.status(201).json(get("formatura_destinos",info.lastInsertRowid));
@@ -1407,15 +1413,15 @@ r.put("/formatura/destinos/:id",autenticar,admin,(req,res)=>fotoUpload.single("f
  if(err)return bad(res,"Envie uma imagem JPG ou PNG de até 20 MB.");
  const id=positiveId(req.params.id),old=id&&get("formatura_destinos",id);if(!old||!old.publicado)return res.status(404).json({erro:"Destino não encontrado."});
  const d=validarDestino(req.body);if(!d)return bad(res,"Confira os campos obrigatórios.");
- const imagem=req.file?"uploads/"+req.file.filename:(clean(req.body.imagem_url,500)||old.imagem_url);
+ const imagem=req.file?"/api/formatura/destinos/imagem/"+req.file.filename:(clean(req.body.imagem_url,500)||old.imagem_url);
  db.prepare("UPDATE formatura_destinos SET tipo=?,nome=?,endereco=?,descricao=?,imagem_url=?,site_url=?,data_passeio=?,atualizado_em=CURRENT_TIMESTAMP WHERE id=?").run(d.tipo,d.nome,d.endereco,d.descricao,imagem,d.site,d.data,id);
- if(req.file&&old.imagem_url.startsWith("uploads/")){const f=path.join(uploadDir,path.basename(old.imagem_url));if(fs.existsSync(f))fs.unlinkSync(f);}
+ if(req.file&&old.imagem_url.startsWith("/api/formatura/destinos/imagem/")){const f=path.join(uploadDir,path.basename(old.imagem_url));if(fs.existsSync(f))fs.unlinkSync(f);}
  res.json(get("formatura_destinos",id));
 }));
 r.delete("/formatura/destinos/:id",autenticar,admin,(req,res)=>{
  const id=positiveId(req.params.id),old=id&&get("formatura_destinos",id);if(!old)return res.status(404).json({erro:"Destino não encontrado."});
  db.prepare("UPDATE formatura_destinos SET publicado=0,atualizado_em=CURRENT_TIMESTAMP WHERE id=?").run(id);
- if(old.imagem_url.startsWith("uploads/")){const f=path.join(uploadDir,path.basename(old.imagem_url));if(fs.existsSync(f))fs.unlinkSync(f);}
+ if(old.imagem_url.startsWith("/api/formatura/destinos/imagem/")){const f=path.join(uploadDir,path.basename(old.imagem_url));if(fs.existsSync(f))fs.unlinkSync(f);}
  res.status(204).end();
 });
 
