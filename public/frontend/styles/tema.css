@@ -2600,3 +2600,43 @@ html[data-bs-theme="light"] #calendarDays .calendar-event.tc-reserva-pendente {
   border-color: #e0a800;
   color: #664d03;
 }
+
+
+/* Contraste correto no modo claro: agenda e descrições */
+html[data-bs-theme="light"] #avisos .agenda-item {
+  background: #ffffff !important;
+  color: #202938 !important;
+  border: 1px solid #d8e0ea !important;
+}
+html[data-bs-theme="light"] #avisos .agenda-item:hover {
+  background: #f5f7fb !important;
+  border-color: #b9c7d8 !important;
+}
+html[data-bs-theme="light"] #avisos .agenda-content h5 {
+  color: #202938 !important;
+}
+html[data-bs-theme="light"] #avisos .agenda-content p {
+  color: #536174 !important;
+}
+html[data-bs-theme="light"] #avisos .agenda-content small {
+  color: #64748b !important;
+}
+html[data-bs-theme="light"] #avisos .agenda-tag.evento {
+  color: #084298 !important;
+  background: #cfe2ff !important;
+}
+html[data-bs-theme="light"] #avisos .agenda-tag.academico {
+  color: #0f5132 !important;
+  background: #d1e7dd !important;
+}
+html[data-bs-theme="light"] #avisos .agenda-tag.reuniao {
+  color: #664d03 !important;
+  background: #fff3cd !important;
+}
+html[data-bs-theme="light"] #avisos .agenda-tag.importante {
+  color: #842029 !important;
+  background: #f8d7da !important;
+}
+html[data-bs-theme="light"] #avisos .agenda-arrow {
+  color: #64748b !important;
+}
