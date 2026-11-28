@@ -2763,6 +2763,10 @@
           i.classList.toggle("ativo", i.getAttribute("href") === "#gerente")
         );
       carregarProdutosAdmin();
+      if (window.__tcHomeAbrirFinanceiro) {
+        window.__tcHomeAbrirFinanceiro = false;
+        document.getElementById("tabGFin")?.click();
+      }
     } else {
       secGerente.classList.add("d-none");
     }
@@ -2995,6 +2999,18 @@
 
     // Editor na própria aba Avisos: somente administradores.
     if (user.papel === "admin") {
+      const homeCard = document.querySelector("[data-home-admin-target]");
+      if (homeCard) {
+        homeCard.href = "#gerente";
+        homeCard.setAttribute("aria-label", "Abrir o Painel Administrativo na área Financeiro + Estoque");
+        const tag = homeCard.querySelector("[data-home-card-tag]");
+        const title = homeCard.querySelector(".aviso-title-card");
+        const description = homeCard.querySelector(".aviso-description");
+        if (tag) tag.textContent = "Administração";
+        if (title) title.textContent = "Painel Administrativo";
+        if (description) description.textContent = "Acesse a gestão de produtos, jogos, pedidos e o controle financeiro.";
+        homeCard.addEventListener("click", () => { window.__tcHomeAbrirFinanceiro = true; });
+      }
       ativarModoGerente();
       configurarEditorAvisosPagina();
       document.querySelector('a.menu-item[href="#pedidos"]')?.remove();
