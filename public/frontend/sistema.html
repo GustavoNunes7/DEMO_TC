@@ -1968,13 +1968,12 @@
  <div class="row g-3" id="formaturaProximoLista"><div class="col-12 text-secondary small">Carregando...</div></div>
 </div>
 <div class="mb-4 text-start">
- <h5 class="fw-bold mb-3">Destinos que já recebemos</h5>
+ <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+  <h5 class="fw-bold mb-0">Destinos que já recebemos</h5>
+  <button type="button" id="formaturaNovoDestino" class="btn btn-outline-danger p-0 d-none" style="width:34px;height:34px;min-width:34px" title="Adicionar destino ou passeio" aria-label="Adicionar destino ou passeio"><i class="bi bi-plus-lg"></i></button>
+ </div>
  <div class="row g-3" id="formaturaDestinosLista"><div class="col-12 text-secondary small">Carregando...</div></div>
 </div>
-<section id="formaturaAdminGestao" class="border border-secondary rounded-3 p-3 mb-4 d-none">
- <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"><div><h5 class="fw-bold mb-1">Gerenciar destinos e passeios</h5><p class="small text-secondary mb-0">Adicione, edite ou exclua os locais exibidos.</p></div><button type="button" class="btn btn-danger" id="formaturaNovoDestino"><i class="bi bi-plus-lg me-1"></i>Adicionar local / passeio</button></div>
- <div id="formaturaAdminLista" class="d-grid gap-2"></div>
-</section>
 <div class="modal fade" id="modalEditarDestino" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content bg-dark text-white border-secondary">
  <div class="modal-header border-secondary"><h5 class="modal-title" id="formaturaDestinoModalTitulo">Adicionar local</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
  <form id="formaturaDestinoForm"><div class="modal-body"><input type="hidden" id="formaturaDestinoId"><div class="row g-3">
@@ -1988,157 +1987,6 @@
  </div><div class="small text-secondary mt-2">Se não houver site, deixe em branco e o botão Saiba mais ficará oculto.</div><div id="formaturaDestinoMsg" class="small mt-2"></div></div>
  <div class="modal-footer border-secondary"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-danger">Salvar</button></div></form>
 </div></div></div>
-
-<div class="mb-4 text-start">
-  <h5 class="fw-bold mb-3">Destinos que já recebemos</h5>
-
-  <div class="row g-3">
-
-    <!-- DESTINO 1 -->
-    <div class="col-12 col-sm-6 col-lg-3">
-      <div
-        class="destino-card rounded-3 overflow-hidden text-start destino-clicavel"
-        role="button"
-        tabindex="0"
-        data-bs-toggle="modal"
-        data-bs-target="#modalDestino"
-        data-local="Thermas Water Park"
-        data-endereco="Rodovia SP-304, Km 189 - São Pedro - SP"
-        data-descricao="Um dos principais parques aquáticos da região, com diversas atrações para aproveitar um dia completo de diversão."
-        data-imagem="../landing/images/thermasPark.jpg"
-        data-site="https://www.thermas.com.br/"
-      >
-
-        <img
-          src="../landing/images/thermasPark.jpg"
-          alt="Thermas Water Park"
-          class="img-fluid w-100 destino-img"
-        />
-
-        <div class="p-2 px-3 bg-dark-card">
-          <h6 class="fw-bold mb-0 text-truncate" style="font-size: 0.9rem">
-            Thermas Water Park
-          </h6>
-
-          <small
-            class="text-secondary d-block" style="font-size: 0.75rem"
-          >
-            São Pedro - SP
-          </small>
-        </div>
-
-      </div>
-    </div>
-
-
-    <!-- DESTINO 2 -->
-    <div class="col-12 col-sm-6 col-lg-3">
-      <div
-        class="destino-card rounded-3 overflow-hidden text-start destino-clicavel"
-        role="button"
-        tabindex="0"
-        data-bs-toggle="modal"
-        data-bs-target="#modalDestino"
-        data-local="Sítio Paraíso Verde"
-        data-endereco="Mairiporã - SP"
-        data-descricao="Um espaço cercado pela natureza, ideal para momentos de lazer, descanso e integração entre os alunos."
-        data-imagem="../landing/images/sitioParaisoVerde.jpg"
-        data-site="#"
-      >
-
-        <img
-          src="../landing/images/sitioParaisoVerde.jpg"
-          alt="Sítio Paraíso Verde"
-          class="img-fluid w-100 destino-img"
-        />
-
-        <div class="p-2 px-3 bg-dark-card">
-          <h6 class="fw-bold mb-0 text-truncate" style="font-size: 0.9rem"> Sítio Paraíso Verde</h6>
-
-          <small
-            class="text-secondary d-block"
-            style="font-size: 0.75rem"
-          >
-            Mairiporã - SP
-          </small>
-        </div>
-
-      </div>
-    </div>
-
-
-    <!-- DESTINO 3 -->
-    <div class="col-12 col-sm-6 col-lg-3">
-      <div
-        class="destino-card rounded-3 overflow-hidden text-start destino-clicavel"
-        role="button"
-        tabindex="0"
-        data-bs-toggle="modal"
-        data-bs-target="#modalDestino"
-        data-local="Hopi Hari"
-        data-endereco="Rodovia dos Bandeirantes, Km 72 - Vinhedo - SP"
-        data-descricao="Um dos maiores parques temáticos do Brasil, com atrações, brinquedos e espaços para diversão durante todo o dia."
-        data-imagem="../landing/images/hopihari.jpg"
-        data-site="https://www.hopihari.com.br/"
-      >
-
-        <img src="../landing/images/hopihari.jpg" alt="Hopi Hari" class="img-fluid w-100 destino-img"/>
-
-        <div class="p-2 px-3 bg-dark-card">
-          <h6 class="fw-bold mb-0 text-truncate" style="font-size: 0.9rem"> Hopi Hari </h6>
-
-          <small
-            class="text-secondary d-block"
-            style="font-size: 0.75rem"
-          >
-            Vinhedo - SP
-          </small>
-        </div>
-
-      </div>
-    </div>
-
-
-    <!-- DESTINO 4 -->
-    <div class="col-12 col-sm-6 col-lg-3">
-      <div
-        class="destino-card rounded-3 overflow-hidden text-start destino-clicavel"
-        role="button"
-        tabindex="0"
-        data-bs-toggle="modal"
-        data-bs-target="#modalDestino"
-        data-local="Sítio Recanto Feliz"
-        data-endereco="Atibaia - SP"
-        data-descricao="Um espaço de lazer e contato com a natureza, pensado para proporcionar um dia agradável de confraternização."
-        data-imagem="../landing/images/sitioRecantoFeliz.jpg"
-        data-site="#"
-      >
-
-        <img
-          src="../landing/images/sitioRecantoFeliz.jpg"
-          alt="Sítio Recanto Feliz"
-          class="img-fluid w-100 destino-img"
-        />
-
-        <div class="p-2 px-3 bg-dark-card">
-          <h6 class="fw-bold mb-0 text-truncate" style="font-size: 0.9rem">
-            Sítio Recanto Feliz
-          </h6>
-
-          <small
-            class="text-secondary d-block"
-            style="font-size: 0.75rem"
-          >
-            Atibaia - SP
-          </small>
-        </div>
-
-      </div>
-    </div>
-
-  </div>
-</div>
-
 
 <!-- MODAL DE INFORMAÇÕES DO DESTINO -->
 <div
@@ -2203,6 +2051,10 @@
             <i class="bi bi-box-arrow-up-right me-2"></i>
             Saiba mais
           </a>
+          <div id="modalDestinoAdminAcoes" class="d-none align-items-center gap-2 mt-3 pt-3 border-top border-secondary">
+            <button type="button" id="modalDestinoEditar" class="btn btn-sm btn-outline-light"><i class="bi bi-pencil me-1"></i>Editar</button>
+            <button type="button" id="modalDestinoExcluir" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i>Excluir</button>
+          </div>
         </div>
       </div>
     </div>
