@@ -390,7 +390,7 @@ r.get("/admin/financeiro/receitas", autenticar, admin, tentar((req, res) => {
 }));
 
 r.get("/admin/financeiro/resumo", autenticar, admin, tentar((req, res) => {
-  const mes = /^\\d{4}-\\d{2}$/.test(String(req.query.mes || "")) ? String(req.query.mes) : new Date().toISOString().slice(0, 7);
+  const mes = /^\d{4}-\d{2}$/.test(String(req.query.mes || "")) ? String(req.query.mes) : new Date().toISOString().slice(0, 7);
   const [ano, numeroMes] = mes.split("-").map(Number);
   if (numeroMes < 1 || numeroMes > 12) throw new HttpErro(400, "Mês inválido.");
   const ultimoDia = new Date(Date.UTC(ano, numeroMes, 0)).getUTCDate();
