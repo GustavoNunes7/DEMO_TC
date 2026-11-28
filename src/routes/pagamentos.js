@@ -390,16 +390,58 @@ r.get("/admin/financeiro/receitas", autenticar, admin, tentar((req, res) => {
 }));
 
 r.get("/admin/financeiro/resumo", autenticar, admin, tentar((req, res) => {
-  const p = periodo(req);
-  const rc = receitas(p);
-  const desp = despesas(p);
+  const mes = /^\\d{4}-\\d{2}$/.test(String(req.query.mes || "")) ? String(req.query.mes) : new Date().toISOString().slice(0, 7);
+  const [ano, numeroMes] = mes.split("-").map(Number);
+  if (numeroMes < 1 || numeroMes > 12) throw new HttpErro(400, "Mês inválido.");
+  const ultimoDia = new Date(Date.UTC(ano, numeroMes, 0)).getUTCDate();
+  const inicioMes = mes + "-01", fimMes = mes + "-" + String(ultimoDia).padStart(2, "0");
+  const p = (req.query.de || req.query.ate) ? periodo(req) : { de: inicioMes, ate: fimMes };
+  const rc = receitas(p), desp = Number(despesas(p) || 0);
+  const saldoInicial = Number(db.prepare("SELECT COALESCE(SUM(valor_centavos),0) total FROM ajustes_saldo_financeiro").get().total || 0);
+  const receitaAcumulada = receitas({ de: "", ate: "" }).total;
+  const despesaAcumulada = Number(despesas({ de: "", ate: "" }) || 0);
+  const saldoDisponivel = saldoInicial + receitaAcumulada - despesaAcumulada;
+  const meses = [];
+  for (let n=11;n>=0;n--) meses.push(new Date(Date.UTC(ano,numeroMes-1-n,1)).toISOString().slice(0,7));
+  const fluxoReceitas = db.prepare(`
+    SELECT substr(date(COALESCE(pg.confirmado_em,pg.criado_em),'localtime'),1,7) mes,SUM(pg.valor_centavos) total
+    FROM pagamentos pg JOIN pedidos ped ON ped.id=pg.pedido_id
+    WHERE pg.status='confirmado' AND ped.status NOT IN ('cancelado','rejeitado')
+      AND substr(date(COALESCE(pg.confirmado_em,pg.criado_em),'localtime'),1,7) BETWEEN ? AND ?
+    GROUP BY mes
+  `).all(meses[0],meses[11]);
+  const fluxoDespesas = db.prepare(`
+    SELECT substr(data_despesa,1,7) mes,SUM(valor_centavos) total
+    FROM despesas_financeiras WHERE data_despesa>=? AND data_despesa<=? GROUP BY mes
+  `).all(meses[0]+"-01",meses[11]+"-31");
+  const mapaReceitas=new Map(fluxoReceitas.map(x=>[x.mes,Number(x.total||0)]));
+  const mapaDespesas=new Map(fluxoDespesas.map(x=>[x.mes,Number(x.total||0)]));
+  const grafico=meses.map(m=>({mes:m,receita:mapaReceitas.get(m)||0,despesas:mapaDespesas.get(m)||0,resultado:(mapaReceitas.get(m)||0)-(mapaDespesas.get(m)||0)}));
+  const maisVendidos=db.prepare(`
+    SELECT pr.id,pr.nome,pr.categoria,SUM(it.quantidade) quantidade,
+           SUM(it.quantidade*it.preco_unitario_centavos) faturamento_centavos
+    FROM itens_pedido it JOIN pedidos ped ON ped.id=it.pedido_id
+    JOIN produtos pr ON pr.id=it.produto_id
+    WHERE ped.status NOT IN ('cancelado','rejeitado')
+      AND EXISTS (SELECT 1 FROM pagamentos pg WHERE pg.pedido_id=ped.id AND pg.status='confirmado')
+    GROUP BY pr.id,pr.nome,pr.categoria ORDER BY quantidade DESC,faturamento_centavos DESC LIMIT 8
+  `).all();
+  const ultimasDespesas=db.prepare(`
+    SELECT d.*,pr.nome produto_nome,u.nome responsavel FROM despesas_financeiras d
+    LEFT JOIN produtos pr ON pr.id=d.produto_id LEFT JOIN usuarios u ON u.id=d.usuario_id
+    ORDER BY d.data_despesa DESC,d.id DESC LIMIT 30
+  `).all();
+  const estoque=db.prepare(`
+    SELECT COUNT(*) produtos,COALESCE(SUM(estoque),0) unidades,
+           COALESCE(SUM(CASE WHEN estoque<=3 THEN 1 ELSE 0 END),0) baixo
+    FROM produtos WHERE ativo=1 AND excluido=0
+  `).get();
   res.json({
-    periodo: p,
-    receitas_centavos: rc.total,
-    despesas_centavos: desp,
-    saldo_centavos: rc.total - desp,
-    por_forma_centavos: rc.porForma,
-    pagamentos_confirmados: rc.rows.length,
+    mes,periodo:p,receita_centavos:rc.total,receitas_centavos:rc.total,
+    despesas_centavos:desp,resultado_centavos:rc.total-desp,saldo_centavos:rc.total-desp,
+    saldo_inicial_centavos:saldoInicial,saldo_disponivel_centavos:saldoDisponivel,
+    por_forma_centavos:rc.porForma,pagamentos_confirmados:rc.rows.length,
+    grafico,mais_vendidos:maisVendidos,despesas:ultimasDespesas,estoque
   });
 }));
 
