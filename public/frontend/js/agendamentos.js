@@ -75,7 +75,7 @@
       mensagem(reserva.status==="aprovado"?"Agendamento confirmado e incluído no calendário!":"Solicitação enviada! Aguarde a autorização da administração.");
       document.dispatchEvent(new CustomEvent("tc-avisos-atualizados"));
       setTimeout(()=>window.bootstrap?.Modal.getInstance($("modalAgendamento"))?.hide(),1100);
-      await carregarPainelAdmin();
+      await carregarPainelAdmin();await carregarPainelAluno();
     }catch(error){mensagem(error.message,true);}finally{button.disabled=false;}
   }
   function instalarModal(){
@@ -105,6 +105,58 @@
     });
     // Data de retirada registrada pela administração.
     form.addEventListener("submit",enviarReserva);
+  }
+  function formatarDataEmprestimo(valor,comHora=false){
+    if(!valor)return "—";
+    const data=new Date(String(valor).replace(" ","T")+(String(valor).length===19?"Z":""));
+    if(Number.isNaN(data.getTime()))return String(valor);
+    return data.toLocaleDateString("pt-BR")+(comHora?" às "+data.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"");
+  }
+  function montarPainelAluno(){
+    const section=$("pedidos");if(!section||$("tcPainelMeusJogos"))return;
+    const box=document.createElement("section");box.id="tcPainelMeusJogos";box.className="mt-4 p-3 p-lg-4 rounded-3 border border-secondary";
+    box.innerHTML='<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"><div><span class="small text-danger fw-bold text-uppercase">Área do aluno</span><h3 class="fw-bold mb-1"><i class="bi bi-controller me-2"></i>Meus jogos emprestados</h3><p class="small text-secondary mb-0">Acompanhe suas solicitações, retiradas e datas de devolução.</p></div><button type="button" class="btn btn-outline-secondary btn-sm" id="tcAtualizarMeusJogos"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar</button></div><div id="tcMeusJogosLista" class="d-grid gap-2"><p class="small text-secondary">Carregando seus empréstimos...</p></div>';
+    const cards=section.querySelector(".row.g-4.justify-content-center");
+    (cards||section.firstElementChild)?.after(box);
+    $("tcAtualizarMeusJogos").addEventListener("click",carregarPainelAluno);
+  }
+  async function carregarPainelAluno(){
+    if(admin||!$("tcPainelMeusJogos"))return;
+    const lista=$("tcMeusJogosLista");if(!lista)return;
+    try{
+      const registros=await api("/agendamentos");
+      const jogos=registros.filter(r=>r.recurso==="Jogos de Tabuleiro");
+      lista.replaceChildren();
+      const ativos=jogos.filter(r=>r.status==="pendente"||(r.status==="aprovado"&&!r.devolvido_em));
+      const historico=jogos.filter(r=>r.status==="rejeitado"||r.status==="cancelado"||(r.status==="aprovado"&&r.devolvido_em));
+      if(!jogos.length){
+        const empty=document.createElement("p");empty.className="small text-secondary mb-0";empty.textContent="Você ainda não possui solicitações de jogos. Quando solicitar um, o acompanhamento aparecerá aqui.";lista.append(empty);return;
+      }
+      [...ativos,...historico].forEach(r=>{
+        const card=document.createElement("article");card.className="border border-secondary rounded-3 p-3";
+        const header=document.createElement("div");header.className="d-flex justify-content-between align-items-start flex-wrap gap-2";
+        const title=document.createElement("strong");title.textContent=r.jogos||"Empréstimo de jogo";
+        const status=document.createElement("span");status.className="badge "+(r.status==="pendente"?"text-bg-warning":r.status==="rejeitado"||r.status==="cancelado"?"text-bg-secondary":r.devolvido_em?"text-bg-secondary":r.retirado_em?(r.atrasado?"text-bg-danger":"text-bg-success"):"text-bg-info");
+        status.textContent=r.status==="pendente"?"Aguardando aprovação":r.status==="rejeitado"?"Solicitação recusada":r.status==="cancelado"?"Cancelado":r.devolvido_em?"Devolvido":r.retirado_em?(r.atrasado?"Devolução atrasada":"Em sua posse"):"Aprovado — aguardando retirada";
+        header.append(title,status);card.append(header);
+        const detail=document.createElement("p");detail.className="small text-secondary mt-2 mb-1";detail.textContent="Solicitado em: "+formatarDataEmprestimo(r.criado_em,true);card.append(detail);
+        if(r.status==="pendente"){
+          const info=document.createElement("p");info.className="small mb-0";info.textContent="Seu pedido está com a administração. Você receberá uma notificação quando houver uma decisão.";card.append(info);
+        }else if(r.status==="aprovado"&&!r.retirado_em){
+          const info=document.createElement("p");info.className="small mb-0";info.textContent="Pedido aprovado! Aguarde a administração registrar a entrega do jogo. O prazo de 14 dias começa na retirada.";card.append(info);
+        }else if(r.retirado_em&&!r.devolvido_em){
+          const due=document.createElement("div");due.className="mt-2 p-3 rounded-2 "+(r.atrasado?"bg-danger bg-opacity-10 border border-danger":"bg-success bg-opacity-10 border border-success");
+          const label=document.createElement("div");label.className="small text-secondary";label.textContent="DATA LIMITE PARA DEVOLUÇÃO";
+          const date=document.createElement("strong");date.className="fs-5 d-block";date.textContent=formatarDataEmprestimo(r.fim);
+          const pickup=document.createElement("small");pickup.className="text-secondary";pickup.textContent="Retirado em "+formatarDataEmprestimo(r.retirado_em,true)+" · Prazo de 14 dias";
+          due.append(label,date,pickup);card.append(due);
+          if(r.atrasado){const warning=document.createElement("p");warning.className="small text-danger mt-2 mb-0";warning.textContent="A data de devolução já passou. Procure a administração para regularizar a devolução.";card.append(warning);}
+        }else if(r.devolvido_em){
+          const info=document.createElement("p");info.className="small text-secondary mb-0 mt-2";info.textContent="Devolvido em: "+formatarDataEmprestimo(r.devolvido_em,true);card.append(info);
+        }
+        lista.append(card);
+      });
+    }catch(e){lista.textContent="Não foi possível carregar seus empréstimos: "+e.message;}
   }
   function montarPainelAdmin(){
     const section=$("pedidos");if(!section||$("tcAdminAgendamentos"))return;
@@ -225,6 +277,8 @@
     try{const perfil=await api("/perfil");admin=perfil.papel==="admin";}catch{}
     instalarModal();
     if(admin){montarPainelAdmin();carregarPainelAdmin();}
+    else {montarPainelAluno();carregarPainelAluno();}
+    document.addEventListener("tc-emprestimos-atualizados",()=>admin?carregarPainelAdmin():carregarPainelAluno());
   }
   document.addEventListener("DOMContentLoaded",init);
 })();
