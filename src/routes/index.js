@@ -23,6 +23,19 @@ const get = (table, id) =>
   db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id);
 const allowed = (value, values) => values.includes(value);
 
+// Saldo inicial demonstrativo da DEMO_TC (lançado uma única vez por banco).
+// Mantido separado de pagamentos reais para não falsificar vendas.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS ajustes_saldo_financeiro (
+    chave TEXT PRIMARY KEY,
+    descricao TEXT NOT NULL,
+    valor_centavos INTEGER NOT NULL,
+    criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+db.prepare("INSERT OR IGNORE INTO ajustes_saldo_financeiro(chave,descricao,valor_centavos) VALUES(?,?,?)")
+  .run("saldo_inicial_demo","Saldo inicial demonstrativo",10000);
+
 // PAGAMENTOS E CONTROLE FINANCEIRO
 r.use(require("./pagamentos"));
 
@@ -510,9 +523,10 @@ r.get("/admin/financeiro/resumo", autenticar, admin, (req, res) => {
     LEFT JOIN usuarios u ON u.id=d.usuario_id ORDER BY d.data_despesa DESC,d.id DESC LIMIT 30`).all();
   const estoque=db.prepare("SELECT COUNT(*) produtos,COALESCE(SUM(estoque),0) unidades,SUM(CASE WHEN estoque<=3 THEN 1 ELSE 0 END) baixo FROM produtos WHERE ativo=1 AND excluido=0").get();
   const receitasAcumuladas=Number(db.prepare("SELECT COALESCE(SUM(valor_centavos),0) total FROM pagamentos WHERE status='confirmado'").get().total);
+  const saldoInicialCentavos=Number(db.prepare("SELECT COALESCE(SUM(valor_centavos),0) total FROM ajustes_saldo_financeiro").get().total);
   const despesasAcumuladas=Number(db.prepare("SELECT COALESCE(SUM(valor_centavos),0) total FROM despesas_financeiras").get().total);
-  const saldoDisponivelCentavos=receitasAcumuladas-despesasAcumuladas;
-  res.json({mes,receita_centavos:receitaMes,despesas_centavos:despesaMes,resultado_centavos:receitaMes-despesaMes,saldo_disponivel_centavos:saldoDisponivelCentavos,grafico,mais_vendidos:maisVendidos,despesas:ultimasDespesas,estoque});
+  const saldoDisponivelCentavos=saldoInicialCentavos+receitasAcumuladas-despesasAcumuladas;
+  res.json({mes,receita_centavos:receitaMes,despesas_centavos:despesaMes,resultado_centavos:receitaMes-despesaMes,saldo_inicial_centavos:saldoInicialCentavos,saldo_disponivel_centavos:saldoDisponivelCentavos,grafico,mais_vendidos:maisVendidos,despesas:ultimasDespesas,estoque});
 });
 r.post("/admin/financeiro/despesas", autenticar, admin, (req,res)=>{
   const categoria=clean(req.body.categoria,40),descricao=clean(req.body.descricao,180),valor=Number(req.body.valor_centavos),data=clean(req.body.data_despesa,10);
@@ -534,8 +548,9 @@ r.post("/admin/estoque/compras-jogos", autenticar, admin, (req,res)=>{
   try{
     db.transaction(()=>{
       const receitas=Number(db.prepare("SELECT COALESCE(SUM(valor_centavos),0) total FROM pagamentos WHERE status='confirmado'").get().total);
+      const saldoInicial=Number(db.prepare("SELECT COALESCE(SUM(valor_centavos),0) total FROM ajustes_saldo_financeiro").get().total);
       const despesas=Number(db.prepare("SELECT COALESCE(SUM(valor_centavos),0) total FROM despesas_financeiras").get().total);
-      const saldo=receitas-despesas;
+      const saldo=saldoInicial+receitas-despesas;
       if(total>saldo)throw new Error("Saldo insuficiente. Disponível: R$ "+(Math.max(0,saldo)/100).toFixed(2).replace(".",",")+". Total da compra: R$ "+(total/100).toFixed(2).replace(".",",")+".");
       let jogo=db.prepare("SELECT * FROM estoque_jogos WHERE nome=?").get(nome);
       if(jogo){
