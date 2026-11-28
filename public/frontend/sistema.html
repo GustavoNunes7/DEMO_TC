@@ -1967,6 +1967,10 @@
  <h5 class="fw-bold mb-3">Próximo passeio</h5>
  <div class="row g-3" id="formaturaProximoLista"><div class="col-12 text-secondary small">Carregando...</div></div>
 </div>
+<section id="formaturaInteressesAdmin" class="mb-4 text-start d-none">
+ <div class="d-flex align-items-center justify-content-between gap-2 mb-3"><h5 class="fw-bold mb-0">Interesse dos alunos nos passeios</h5><button type="button" id="formaturaAtualizarInteresses" class="btn btn-sm btn-outline-secondary" title="Atualizar lista"><i class="bi bi-arrow-clockwise"></i></button></div>
+ <div id="formaturaInteressesLista" class="d-grid gap-2"><div class="text-secondary small">Carregando...</div></div>
+</section>
 <div class="mb-4 text-start">
  <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
   <h5 class="fw-bold mb-0">Destinos que já recebemos</h5>
@@ -2051,6 +2055,10 @@
             <i class="bi bi-box-arrow-up-right me-2"></i>
             Saiba mais
           </a>
+          <div id="modalDestinoAlunoAcoes" class="d-none mt-3">
+            <button type="button" id="modalDestinoInteresse" class="btn btn-danger fw-semibold"><i class="bi bi-heart me-2"></i>Tenho interesse</button>
+            <small id="modalDestinoInteresseMsg" class="d-block text-secondary mt-2" aria-live="polite"></small>
+          </div>
           <div id="modalDestinoAdminAcoes" class="d-none align-items-center gap-2 mt-3 pt-3 border-top border-secondary">
             <button type="button" id="modalDestinoEditar" class="btn btn-sm btn-outline-light"><i class="bi bi-pencil me-1"></i>Editar</button>
             <button type="button" id="modalDestinoExcluir" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i>Excluir</button>
