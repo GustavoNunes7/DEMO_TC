@@ -1390,6 +1390,35 @@ if(!db.prepare("SELECT COUNT(*) total FROM formatura_destinos").get().total){
  db.transaction(()=>destinosIniciais.forEach(x=>ins.run(...x)))();
 }
 r.get("/formatura/destinos",(_req,res)=>res.json(db.prepare("SELECT * FROM formatura_destinos WHERE publicado=1 ORDER BY CASE tipo WHEN 'proximo' THEN 0 ELSE 1 END,id DESC").all()));
+db.exec(`CREATE TABLE IF NOT EXISTS formatura_interesses (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ destino_id INTEGER NOT NULL REFERENCES formatura_destinos(id),
+ usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+ criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ UNIQUE(destino_id,usuario_id)
+);`);
+r.post("/formatura/destinos/:id/interesse",autenticar,(req,res)=>{
+ const id=positiveId(req.params.id),destino=id&&db.prepare("SELECT * FROM formatura_destinos WHERE id=? AND publicado=1 AND tipo='proximo'").get(id);
+ if(!destino)return res.status(404).json({erro:"Próximo passeio não encontrado."});
+ const aluno=db.prepare("SELECT id,nome,nome_preferencia FROM usuarios WHERE id=? AND ativo=1 AND papel='aluno'").get(req.usuario.id);
+ if(!aluno)return res.status(403).json({erro:"Somente alunos podem demonstrar interesse."});
+ try{
+  const info=db.prepare("INSERT INTO formatura_interesses(destino_id,usuario_id) VALUES(?,?)").run(id,aluno.id);
+  notificarAdmins("Interesse em passeio",`${aluno.nome_preferencia||aluno.nome} demonstrou interesse em participar de "${destino.nome}". Consulte a lista de interessados na Temporada de Formatura.`);
+  res.status(201).json({id:info.lastInsertRowid,mensagem:"Seu interesse foi registrado com sucesso."});
+ }catch(err){if(String(err.message).includes("UNIQUE"))return res.status(409).json({erro:"Você já demonstrou interesse neste passeio."});throw err;}
+});
+r.get("/formatura/interesses",autenticar,admin,(req,res)=>{
+ const rows=db.prepare(`SELECT i.id,i.destino_id,i.usuario_id,i.criado_em,d.nome AS passeio,u.nome,u.nome_preferencia,u.email,u.telefone,u.turma,
+ COALESCE(p.exibir_email,0) AS exibir_email,COALESCE(p.exibir_telefone,0) AS exibir_telefone
+ FROM formatura_interesses i JOIN formatura_destinos d ON d.id=i.destino_id JOIN usuarios u ON u.id=i.usuario_id
+ LEFT JOIN preferencias_privacidade p ON p.usuario_id=u.id
+ WHERE d.publicado=1 AND u.ativo=1 ORDER BY i.criado_em DESC,i.id DESC`).all();
+ res.json(rows.map(x=>({...x,nome_exibicao:x.nome_preferencia||x.nome,email:x.exibir_email?x.email:null,telefone:x.exibir_telefone?x.telefone:null})));
+});
+r.get("/formatura/interesses/meus",autenticar,(req,res)=>{
+ res.json(db.prepare("SELECT destino_id FROM formatura_interesses WHERE usuario_id=?").all(req.usuario.id).map(x=>x.destino_id));
+});
 r.get("/formatura/destinos/imagem/:arquivo",(req,res)=>{
  const arquivo=path.basename(req.params.arquivo);
  const existe=db.prepare("SELECT 1 FROM formatura_destinos WHERE imagem_url=? AND publicado=1").get("/api/formatura/destinos/imagem/"+arquivo);
