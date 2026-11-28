@@ -2640,3 +2640,10 @@ html[data-bs-theme="light"] #avisos .agenda-tag.importante {
 html[data-bs-theme="light"] #avisos .agenda-arrow {
   color: #64748b !important;
 }
+
+
+/* Início — descrição do banner com contraste confortável no modo escuro */
+html:not([data-bs-theme="light"]) #inicio .hero-card p.text-secondary {
+  color: #aeb8c6 !important;
+  opacity: 1;
+}
