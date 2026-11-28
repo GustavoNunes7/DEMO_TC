@@ -1519,7 +1519,7 @@
         <div id="gJogos" hidden>
           <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
             <div><h3 class="fw-bold mb-1"><i class="bi bi-controller text-danger me-2"></i>Gerenciamento de Jogos</h3><p class="small text-secondary mb-0">Controle o catálogo, os empréstimos, as aprovações e os prazos de devolução.</p></div>
-            <button type="button" class="btn btn-outline-light btn-sm" id="gJogosAtualizar"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar painel</button>
+            <div class="d-flex gap-2"><button type="button" class="btn btn-danger" id="gJogoNovo"><i class="bi bi-plus-lg me-1"></i>Adicionar jogo</button><button type="button" class="btn btn-outline-light btn-sm" id="gJogosAtualizar"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar painel</button></div>
           </div>
           <div class="row g-3 mb-4">
             <div class="col-6 col-xl-3"><div class="border border-secondary rounded-3 p-3 h-100"><div class="small text-secondary">Tipos cadastrados</div><strong class="fs-2" id="gJogosKpiTipos">—</strong></div></div>
@@ -1681,6 +1681,7 @@
             <div class="col-12 col-sm-6 col-xl-3"><div class="tc-card tc-kpi" style="--tc-tint:#fff0f0"><div class="tc-kpi-label"><i class="bi bi-arrow-down-right me-1 text-danger"></i>Despesas</div><div class="tc-kpi-value text-danger" id="gFinDespesas">R$ 0,00</div><div class="tc-kpi-note">Despesas registradas no mês</div></div></div>
             <div class="col-12 col-sm-6 col-xl-3"><div class="tc-card tc-kpi" style="--tc-tint:#eaf3ff"><div class="tc-kpi-label"><i class="bi bi-wallet2 me-1 text-primary"></i>Resultado estimado</div><div class="tc-kpi-value" id="gFinResultado">R$ 0,00</div><div class="tc-kpi-note">Receitas menos despesas</div></div></div>
             <div class="col-12 col-sm-6 col-xl-3"><div class="tc-card tc-kpi" style="--tc-tint:#f2edff"><div class="tc-kpi-label"><i class="bi bi-box-seam me-1" style="color:#8065d8"></i>Unidades em estoque</div><div class="tc-kpi-value" id="gFinUnidades">0</div><div class="tc-kpi-note"><span id="gFinEstoqueBaixo">0</span> produtos com estoque baixo</div></div></div>
+            <div class="col-12 col-sm-6 col-xl-3"><div class="tc-card tc-kpi" style="--tc-tint:#e2fbf4"><div class="tc-kpi-label"><i class="bi bi-wallet2 me-1 text-success"></i>Saldo disponível estimado</div><div class="tc-kpi-value text-success" id="gFinSaldoDisponivel">R$ 0,00</div><div class="tc-kpi-note">Receitas confirmadas menos todas as despesas</div></div></div>
           </div>
           <div class="row g-3 mb-3">
             <div class="col-12 col-xl-7"><div class="tc-card">
@@ -1694,6 +1695,18 @@
             </div></div>
           </div>
           <div class="row g-3 mb-3">
+            <div class="col-12"><div class="tc-card">
+              <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3"><div><h5 class="tc-section-title"><i class="bi bi-controller me-1"></i>Compra de jogos</h5><div class="tc-panel-note">A compra desconta do saldo disponível e aumenta o estoque de jogos automaticamente.</div></div><span class="badge text-bg-success">Integrado ao financeiro</span></div>
+              <form id="gEstoqueCompraJogo" class="row g-3">
+                <div class="col-12 col-md-4"><label class="form-label small fw-semibold" for="gEstoqueJogoNome">Jogo</label><select id="gEstoqueJogoNome" class="form-select tc-fin-field" required></select></div>
+                <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="gEstoqueJogoQtd">Quantidade</label><input id="gEstoqueJogoQtd" type="number" min="1" max="500" step="1" class="form-control tc-fin-field" required></div>
+                <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="gEstoqueJogoCusto">Custo unitário (R$)</label><input id="gEstoqueJogoCusto" type="number" min="0.01" step="0.01" class="form-control tc-fin-field" required></div>
+                <div class="col-6 col-md-2"><label class="form-label small fw-semibold" for="gEstoqueJogoData">Data da compra</label><input id="gEstoqueJogoData" type="date" class="form-control tc-fin-field" required></div>
+                <div class="col-6 col-md-2 d-flex align-items-end"><button class="btn tc-fin-btn w-100" type="submit"><i class="bi bi-cart-plus me-1"></i>Comprar jogos</button></div>
+                <div class="col-12"><label class="form-label small fw-semibold" for="gEstoqueJogoObs">Fornecedor / observação</label><input id="gEstoqueJogoObs" maxlength="180" class="form-control tc-fin-field" placeholder="Opcional"></div>
+              </form>
+              <div id="gEstoqueJogoMsg" class="small mt-3" role="status"></div>
+            </div></div>
             <div class="col-12 col-xl-7"><div class="tc-card">
               <div class="mb-3"><h5 class="tc-section-title">Entrada de mercadorias</h5><div class="tc-panel-note">Registre compras e atualize o saldo do estoque automaticamente.</div></div>
               <form id="gEstoqueCompra" class="row g-3">
@@ -1817,6 +1830,37 @@
       </div>`;
     document.body.append(jogoModalWrap.firstElementChild);
     modalJogoAdmin=new bootstrap.Modal($("modalJogoAdmin"));
+    const novoJogoWrap=h("div");
+    novoJogoWrap.innerHTML=`
+      <div class="modal fade" id="modalNovoJogoAdmin" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered"><div class="modal-content bg-dark text-white border-secondary">
+          <div class="modal-header border-secondary"><h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Cadastrar novo jogo</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+          <form id="gNovoJogoForm">
+            <div class="modal-body">
+              <p class="small text-secondary">Cadastre o jogo no catálogo. A compra de unidades e a saída do dinheiro são feitas em Estoque + Financeiro.</p>
+              <label class="form-label small" for="gNovoJogoNome">Nome do jogo</label><input id="gNovoJogoNome" class="form-control bg-dark text-white border-secondary mb-3" maxlength="100" required>
+              <label class="form-label small" for="gNovoJogoDescricao">Descrição</label><textarea id="gNovoJogoDescricao" class="form-control bg-dark text-white border-secondary mb-3" rows="2" maxlength="300"></textarea>
+              <label class="form-label small" for="gNovoJogoReposicao">Valor de reposição estimado (R$)</label><input id="gNovoJogoReposicao" type="number" min="0" step="0.01" value="0" class="form-control bg-dark text-white border-secondary">
+              <div class="small text-secondary mt-2">O jogo será cadastrado com 0 unidades até que uma compra seja registrada.</div>
+              <div id="gNovoJogoMsg" class="small mt-2" role="status"></div>
+            </div>
+            <div class="modal-footer border-secondary"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-danger">Cadastrar jogo</button></div>
+          </form>
+        </div></div>
+      </div>`;
+    document.body.append(novoJogoWrap.firstElementChild);
+    const modalNovoJogo=new bootstrap.Modal($("modalNovoJogoAdmin"));
+    $("gJogoNovo").addEventListener("click",()=>{$("gNovoJogoForm").reset();$("gNovoJogoReposicao").value="0";$("gNovoJogoMsg").textContent="";modalNovoJogo.show();});
+    $("gNovoJogoForm").addEventListener("submit",async ev=>{
+      ev.preventDefault();const btn=ev.currentTarget.querySelector('[type="submit"]');btn.disabled=true;
+      try{
+        const nome=$("gNovoJogoNome").value.trim(),descricao=$("gNovoJogoDescricao").value.trim(),valor=Math.round(Number($("gNovoJogoReposicao").value||0)*100);
+        if(!nome||!Number.isSafeInteger(valor)||valor<0)throw Error("Confira o nome e o valor de reposição.");
+        await api("/agendamentos/estoque",{method:"POST",body:JSON.stringify({nome,descricao,quantidade:0,valor_reposicao_centavos:valor})});
+        modalNovoJogo.hide();await carregarGerenciamentoJogos();
+      }catch(e){$("gNovoJogoMsg").textContent=e.message||"Não foi possível cadastrar o jogo.";}
+      finally{btn.disabled=false;}
+    });
     $("gJogoSalvar").addEventListener("click",async()=>{
       if(!jogoEmEdicao)return;
       const btn=$("gJogoSalvar");btn.disabled=true;$("gJogoEditarMsg").textContent="Salvando alterações...";
@@ -1850,9 +1894,11 @@
     $("gJogosAtualizar").onclick = carregarGerenciamentoJogos;
     $("gFinMes").value = new Date().toISOString().slice(0,7);
     $("gEstoqueData").value = new Date().toISOString().slice(0,10);
+    $("gEstoqueJogoData").value = new Date().toISOString().slice(0,10);
     $("gFinData").value = new Date().toISOString().slice(0,10);
     $("gFinAtualizar").onclick = carregarFinanceiroAdmin;
     $("gEstoqueCompra").addEventListener("submit", registrarCompraEstoque);
+    $("gEstoqueCompraJogo").addEventListener("submit", registrarCompraJogos);
     $("gFinDespesaForm").addEventListener("submit", registrarDespesaFinanceira);
 
     $("gAtualizarTokens").onclick = carregarTokensAdmin;
@@ -2102,7 +2148,13 @@
       $("gFinDespesas").textContent=valorReal(dados.despesas_centavos);
       $("gFinResultado").textContent=valorReal(dados.resultado_centavos);
       $("gFinResultado").classList.toggle("text-success",dados.resultado_centavos>=0);
+      $("gFinSaldoDisponivel").textContent=valorReal(dados.saldo_disponivel_centavos);
+      $("gFinSaldoDisponivel").classList.toggle("text-danger",Number(dados.saldo_disponivel_centavos)<0);
+      $("gFinSaldoDisponivel").classList.toggle("text-success",Number(dados.saldo_disponivel_centavos)>=0);
       $("gEstoqueProduto").replaceChildren(...produtos.map(p=>h("option",{value:p.id},p.nome+" (estoque: "+p.estoque+")")));
+      const jogosCompra=await api("/agendamentos/estoque");
+      $("gEstoqueJogoNome").replaceChildren(...jogosCompra.map(j=>h("option",{value:j.nome},j.nome+" (disponíveis: "+(j.quantidade_disponivel??0)+")")));
+      if(!jogosCompra.length)$("gEstoqueJogoNome").append(h("option",{value:""},"Cadastre um jogo primeiro"));
       if(!produtos.length)$("gEstoqueProduto").append(h("option",{value:""},"Cadastre um produto primeiro"));
       await carregarEstoqueJogos();
       const max=Math.max(1,...dados.grafico.flatMap(x=>[x.receita,x.despesas]));
@@ -2197,6 +2249,25 @@
       });
       setMsg(msg,"Dados atualizados. O resultado é uma estimativa baseada em pagamentos confirmados e despesas registradas.","success");
     } catch(e){setMsg(msg,e.message);}
+  }
+
+  async function registrarCompraJogos(event){
+    event.preventDefault();
+    const form=$("gEstoqueCompraJogo"),btn=form.querySelector('[type="submit"]');btn.disabled=true;
+    setMsg($("gEstoqueJogoMsg"),"Calculando compra e verificando saldo...","secondary");
+    try{
+      const result=await api("/admin/estoque/compras-jogos",{method:"POST",body:JSON.stringify({
+        nome:$("gEstoqueJogoNome").value,
+        quantidade:Number($("gEstoqueJogoQtd").value),
+        custo_unitario_centavos:Math.round(Number($("gEstoqueJogoCusto").value)*100),
+        data_compra:$("gEstoqueJogoData").value,
+        observacao:$("gEstoqueJogoObs").value.trim()
+      })});
+      form.reset();$("gEstoqueJogoData").value=new Date().toISOString().slice(0,10);
+      setMsg($("gEstoqueJogoMsg"),"Compra registrada: +"+result.quantidade+" unidade(s) de "+result.jogo.nome+". Total debitado: "+valorReal(result.valor_total_centavos)+".","success");
+      await Promise.all([carregarFinanceiroAdmin(),carregarGerenciamentoJogos()]);
+    }catch(e){setMsg($("gEstoqueJogoMsg"),e.message||"Não foi possível concluir a compra.");}
+    finally{btn.disabled=false;}
   }
 
   async function registrarCompraEstoque(event){
