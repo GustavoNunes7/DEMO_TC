@@ -20,6 +20,10 @@ app.get("/teste", (_req, res) =>
   }),
 );
 app.get("/", (_req, res) => res.redirect("/landing/index.html"));
+app.use((req, res) => {
+  console.warn(`[STATIC 404] ${req.method} ${req.originalUrl}`);
+  res.status(404).send("Recurso não encontrado.");
+});
 app.use((err, req, res, next) => {
   if (err instanceof SyntaxError && "body" in err)
     return res.status(400).json({ erro: "JSON inválido." });
