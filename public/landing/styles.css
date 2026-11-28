@@ -4035,3 +4035,22 @@ body.sidebar-fechada #sistemaInicio .techcampus-footer {
   #avisos .calendar-header { flex-wrap: wrap; gap: 12px; }
   #avisos .agenda-item { gap: 10px; padding: 11px; }
 }
+
+
+/* Cards de destaque da página inicial: navegação direta para as seções */
+.aviso-card-link {
+  display: flex;
+  width: 100%;
+  color: inherit;
+  text-decoration: none !important;
+  cursor: pointer;
+}
+.aviso-card-link:focus-visible {
+  outline: 3px solid #e34b55;
+  outline-offset: 4px;
+}
+.aviso-card-link:hover,
+.aviso-card-link:visited {
+  color: inherit;
+  text-decoration: none;
+}
